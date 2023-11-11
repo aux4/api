@@ -1,0 +1,92 @@
+{
+  "profiles": [
+    {
+      "name": "main",
+      "commands": [
+        {
+          "name": "ship",
+          "execute": [
+            "git pull -r",
+            "npm test",
+            "git push"
+          ],
+          "help": {
+            "text": "🚢 pull test and push the code"
+          }
+        },
+        {
+          "value": "test-summary",
+          "execute": [
+            "echo '# Test Summary\n' > test/README.md",
+            "cd test && ls *.test.md | xargs -I {} sh -c 'echo \"* [$(head -n 1 {} | cut -c3-)]({})\" >> README.md'"
+          ],
+          "help": {
+            "description": "generate test summary"
+          }
+        },
+        {
+          "name": "release",
+          "execute": [
+            "git pull -r",
+            "npm test",
+            "aux4 test-summary",
+            "git diff --quiet && git diff --staged --quiet || git commit -am 'Update test summary'",
+            "npm version ${version}",
+            "json:cat package.json",
+            "set:versionNumber=${response.version}",
+            "npm publish --access public --tag ${tag} --otp=${otp}",
+            "git push --follow-tags",
+            "echo ${versionNumber} released successfully"
+          ],
+          "help": {
+            "text": "release new version of @aux4/template",
+            "variables": [
+              {
+                "name": "version",
+                "text": "type of version release. e.g.: major, minor, patch",
+                "default": "patch",
+                "options": [
+                  "major",
+                  "minor",
+                  "patch"
+                ]
+              },
+              {
+                "name": "tag",
+                "text": "dist tag for npm publish",
+                "default": "latest"
+              },
+              {
+                "name": "otp",
+                "text": "npm one time password"
+              }
+            ]
+          }
+        },
+        {
+          "name": "publish",
+          "execute": [
+            "json:cat package.json",
+            "set:packageName=${response.name};version=${response.version}",
+            "npm dist-tag remove ${packageName}@${version} beta --otp=${otp}",
+            "npm dist-tag add ${packageName}@${version} ${tag} --otp=${otp}"
+          ],
+          "help": {
+            "text": "publish the current version to npm",
+            "variables": [
+              {
+                "name": "tag",
+                "text": "dist tag for npm publish",
+                "default": "latest"
+              },
+              {
+                "name": "otp",
+                "text": "npm one time password"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

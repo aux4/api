@@ -1,0 +1,37 @@
+{
+  "name": "@aux4/template",
+  "version": "0.0.1",
+  "description": "",
+  "main": "index.js",
+  "preferGlobal": true,
+  "bin": {
+    "aux4-": "bin/executable.js"
+  },
+  "scripts": {
+    "test": "aux4-test run",
+    "coverage": "aux4-test coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/aux4/template.git"
+  },
+  "keywords": [
+    "aux4",
+    "cli"
+  ],
+  "author": "Aux4 Team",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/aux4/template/issues"
+  },
+  "homepage": "https://aux4.io",
+  "funding": "https://aux4.io/donate",
+  "dependencies": {
+    "@aux4/config": "^1.0.3",
+    "@aux4/engine": "^1.0.53",
+    "@aux4/input": "^0.0.3"
+  },
+  "devDependencies": {
+    "@aux4/test": "^0.0.19"
+  }
+}

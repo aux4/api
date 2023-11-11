@@ -1,0 +1,7 @@
+.idea/
+node_modules/
+test/
+local-test/
+coverage/
+.aux4
+.prettierrc.json

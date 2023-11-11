@@ -1,0 +1,42 @@
+{
+  "profiles": [
+    {
+      "name": "main",
+        "commands": [
+          {
+            "name": "init",
+            "execute": [
+              "sed -i '' 's/<name>/${name}/g' DOC.md",
+              "sed -i '' 's/<executor>/${executor}/g' DOC.md",
+              "sed -i '' 's/<description>/${description}/g' DOC.md",
+              "mv DOC.md README.md",
+              "node lib/init.js name='${name}' description='${description}' command='${executor}' keywords='${keywords}'",
+              "rm lib/init.js",
+              "mv aux4.json .aux4"
+            ],
+            "help": {
+              "text": "Initialize the project",
+              "variables": [
+                {
+                  "name": "name",
+                  "text": "The name of the project"
+                },
+                {
+                  "name": "description",
+                  "text": "The description of the project"
+                },
+                {
+                  "name": "executor",
+                  "text": "The CLI command to execute"
+                },
+                {
+                  "name": "keywords",
+                  "text": "Keywords comma separated"
+                }
+              ]
+            }
+          }
+        ]
+    }
+  ]
+}
