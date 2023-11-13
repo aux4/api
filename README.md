@@ -1,8 +1,15 @@
-# template
-Aux4 CLI Template
+# @aux4/api
+Aux4 API
+
+![npm](https://img.shields.io/npm/v/@aux4/api)
 
 ## Install
 
 ```bash
-aux4 init
+npm install -g @aux4/api
+```
+
+## Usage
+```bash
+$ aux4-api
 ```
