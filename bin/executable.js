@@ -32,8 +32,12 @@ async function loadConfig(params) {
   const configFile = await params.configFile;
   const configName = await params.config;
 
-  const config = ConfigLoader.load(configFile);
-  return config.get(configName);
+  try {
+    const config = ConfigLoader.load(configFile);
+    return config.get(configName);
+  } catch (e) {
+    return {};
+  }
 }
 
 (async () => {
@@ -45,6 +49,6 @@ async function loadConfig(params) {
     await engine.run(args);
   } catch (e) {
     console.error(e.message.red);
-    process.exit(1);
+    process.exit(e.exitCode || 1);
   }
 })();
