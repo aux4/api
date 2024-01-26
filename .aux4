@@ -15,13 +15,13 @@
           }
         },
         {
-          "value": "test-summary",
+          "name": "test-summary",
           "execute": [
             "echo '# Test Summary\n' > test/README.md",
             "cd test && ls *.test.md | xargs -I {} sh -c 'echo \"* [$(head -n 1 {} | cut -c3-)]({})\" >> README.md'"
           ],
           "help": {
-            "description": "generate test summary"
+            "text": "generate test summary"
           }
         },
         {
