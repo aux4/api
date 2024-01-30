@@ -1,6 +1,6 @@
 {
   "name": "@aux4/api",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Aux4 API",
   "main": "index.js",
   "preferGlobal": true,
