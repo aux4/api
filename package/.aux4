@@ -1,0 +1,57 @@
+{
+  "scope": "aux4",
+  "name": "api",
+  "version": "0.0.1",
+  "description": "aux4 API",
+  "tags": [
+    "api",
+    "aux4"
+  ],
+  "profiles": [
+    {
+      "name": "main",
+      "commands": [
+        {
+          "name": "api",
+          "execute": [
+            "profile:api"
+          ],
+          "help": {
+            "text": "aux4 API"
+          }
+        }
+      ]
+    },
+    {
+      "name": "api",
+      "commands": [
+        {
+          "name": "start",
+          "execute": [
+            "node ${packageDir}/lib/server.js start values(port, cors, api)"
+          ],
+          "help": {
+            "text": "Start the aux4 API server",
+            "variables": [
+              {
+                "name": "port",
+                "text": "The port to run the API server on",
+                "default": "9876"
+              },
+              {
+                "name": "cors",
+                "text": "CORS configuration for the API server",
+                "default": ""
+              },
+              {
+                "name": "api",
+                "text": "The endpoint mapping for the API",
+                "default": ""
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
