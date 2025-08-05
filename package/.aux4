@@ -28,7 +28,7 @@
         {
           "name": "start",
           "execute": [
-            "node ${packageDir}/lib/server.js start values(port, cors, api)"
+            "node ${packageDir}/lib/server.js start values(port, cors, api, server)"
           ],
           "help": {
             "text": "Start the aux4 API server",
@@ -46,6 +46,11 @@
               {
                 "name": "api",
                 "text": "The endpoint mapping for the API",
+                "default": ""
+              },
+              {
+                "name": "server",
+                "text": "Server configuration including file upload limits",
                 "default": ""
               }
             ]

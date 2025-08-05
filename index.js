@@ -7,7 +7,7 @@ async function main() {
     const args = process.argv.slice(2);
     
     if (args.length === 0 || args[0] !== 'start') {
-      console.error('Usage: node index.js start [port] [cors] [api]');
+      console.error('Usage: node index.js start [port] [cors] [api] [server]');
       process.exit(1);
     }
 
@@ -35,6 +35,14 @@ async function main() {
         config.api = JSON.parse(args[3]);
       } catch (error) {
         config.api = args[3];
+      }
+    }
+    
+    if (args[4]) {
+      try {
+        config.server = JSON.parse(args[4]);
+      } catch (error) {
+        config.server = args[4];
       }
     }
 
