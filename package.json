@@ -26,17 +26,18 @@
   },
   "homepage": "https://aux4.io",
   "dependencies": {
-    "body-parser": "^1.20.2",
+    "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^9.0.3",
+    "@fastify/static": "^8.2.0",
+    "@fastify/view": "^11.1.0",
     "busboy": "^1.6.0",
     "consolidate": "^1.0.3",
     "cors": "^2.8.5",
-    "express": "^4.18.2",
-    "express-handlebars": "^7.1.2",
+    "fastify": "^5.4.0",
+    "handlebars": "^4.7.8",
     "handlebars-i18n": "^1.6.3",
     "nanoid": "^5.0.3",
-    "response-time": "^2.3.2",
-    "serve-favicon": "^2.5.0",
-    "uuid": "^9.0.1"
+    "uuid": "^11.1.0"
   },
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.6",
