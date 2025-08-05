@@ -1,7 +1,7 @@
 {
   "scope": "aux4",
   "name": "api",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "aux4 API",
   "tags": [
     "api",
