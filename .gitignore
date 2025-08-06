@@ -68,3 +68,4 @@ local-test
 .DS_Store
 
 package/lib
+*.zip
