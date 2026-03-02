@@ -1,0 +1,18 @@
+{
+  "profiles": [
+    {
+      "name": "main",
+      "commands": [
+        {
+          "name": "greet",
+          "execute": [
+            "stdin:node -e \"const e=JSON.parse(require('fs').readFileSync(0,'utf8'));const n=(e.queryStringParameters&&e.queryStringParameters.name)||'World';console.log(JSON.stringify({statusCode:200,headers:{'Content-Type':'text/plain'},body:'hello '+n}))\""
+          ],
+          "help": {
+            "text": "Greet someone"
+          }
+        }
+      ]
+    }
+  ]
+}

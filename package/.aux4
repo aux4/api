@@ -1,7 +1,7 @@
 {
   "scope": "aux4",
   "name": "api",
-  "version": "0.0.5",
+  "version": "0.1.0",
   "description": "aux4 API",
   "tags": [
     "api",
@@ -28,7 +28,7 @@
         {
           "name": "start",
           "execute": [
-            "node ${packageDir}/lib/server.js start values(port, cors, api, server)"
+            "node ${packageDir}/lib/server.js start values(port, cors, api, ws, server)"
           ],
           "help": {
             "text": "Start the aux4 API server",
@@ -36,7 +36,8 @@
               {
                 "name": "port",
                 "text": "The port to run the API server on",
-                "default": "9876"
+                "default": "9876",
+                "env": "AUX4_API_PORT"
               },
               {
                 "name": "cors",
@@ -46,6 +47,11 @@
               {
                 "name": "api",
                 "text": "The endpoint mapping for the API",
+                "default": ""
+              },
+              {
+                "name": "ws",
+                "text": "The WebSocket route configuration",
                 "default": ""
               },
               {

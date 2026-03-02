@@ -8,28 +8,15 @@ aux4 api start [--configFile <file>] [--config <config>] [--port <number>] [opti
 
 ### Description
 
-The `aux4 api start` command launches a Fastify-based HTTP server that exposes Aux4 CLI commands through REST API endpoints and provides server-side rendering capabilities using Handlebars templates.
+The `aux4 api start` command launches a Fastify-based HTTP server that bridges web requests to aux4 CLI commands using an AWS API Gateway-compatible request/response format.
 
-The server automatically:
+The server supports:
 
-- Maps API endpoints to CLI commands (`/api/command/subcommand` → `aux4 command subcommand`)
-- Serves static files from the `static/` directory
-- Renders Handlebars templates from the `views/` directory
-- Handles file uploads with configurable limits
-- Provides error handling with custom error pages
-
-### Options
-
-#### `--config <file>`
-
-Path to a YAML configuration file. If not specified, the server uses default settings.
-
-**Example:**
-
-```bash
-aux4 api start --config config.yaml
-aux4 api start --config /path/to/server-config.yaml
-```
+- **REST API** endpoints that map HTTP routes to aux4 commands (event piped via stdin, response via stdout)
+- **WebSocket** connections following AWS API Gateway WebSocket patterns
+- **Convention-based views** using Handlebars templates from the `views/` directory
+- **Static file serving** from the `static/` directory
+- **File uploads** with configurable limits
 
 #### `--port <number>`
 
@@ -55,18 +42,96 @@ config:
       fieldSize: 1048576
       parts: 10
   api:
-    "GET /endpoint":
-      output:
-        base64: false
-      response:
-        status: 200
-        headers:
-          Content-Type: "application/json"
+    "GET /say":
+      command: say
+    "POST /users/{id}":
+      command: update-user
+  ws:
+    "/chat":
+      routes:
+        $connect: chat-connect
+        $disconnect: chat-disconnect
+        $default: chat-message
+        sendMessage: chat-send
   cors:
     origin: "*"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     credentials: false
 ```
+
+### REST API
+
+Routes are defined in `config.api` with the format `"METHOD /path"`. Path parameters use `{name}` syntax.
+
+When a request matches a route:
+1. An AWS API Gateway-style event is built with `httpMethod`, `path`, `headers`, `queryStringParameters`, `multiValueQueryStringParameters`, `pathParameters`, `body`, and `requestContext`
+2. The event JSON is piped to the aux4 command via stdin
+3. The command must return an API Gateway response on stdout:
+
+```json
+{
+  "statusCode": 200,
+  "headers": { "Content-Type": "application/json" },
+  "body": "{\"message\": \"hello\"}",
+  "isBase64Encoded": false
+}
+```
+
+**Example command (.aux4):**
+
+```json
+{
+  "name": "say",
+  "execute": ["stdin:node say-handler.js"],
+  "help": { "text": "Say hello" }
+}
+```
+
+**Example handler (say-handler.js):**
+
+```javascript
+const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const name = event.queryStringParameters?.name || "World";
+const response = {
+  statusCode: 200,
+  headers: { "Content-Type": "text/plain" },
+  body: `hello ${name}`
+};
+console.log(JSON.stringify(response));
+```
+
+### WebSocket Support
+
+WebSocket routes are defined in `config.ws`. Each WebSocket path maps lifecycle events and actions to aux4 commands.
+
+#### Route Keys
+
+- `$connect` - Fired when a client connects
+- `$disconnect` - Fired when a client disconnects
+- `$default` - Fired when no matching action is found
+- `<action>` - Custom action matched from `{ "action": "<action>" }` in message body
+
+#### Management API
+
+- `POST /@connections/:connectionId` - Send a message to a specific connection
+- `DELETE /@connections/:connectionId` - Disconnect a specific connection
+
+### Convention-Based Views
+
+Handlebars templates in the `views/` directory are automatically registered as GET routes:
+
+| File | Route | Parameters |
+|------|-------|------------|
+| `views/index.hbs` | `GET /` | none |
+| `views/about.hbs` | `GET /about` | none |
+| `views/users/{id}.hbs` | `GET /users/:id` | `{ id }` |
+| `views/greet.p.hbs` | `GET /greet` | none (no layout) |
+
+- `.hbs` files render with the layout (`views/layouts/main.hbs`)
+- `.p.hbs` files render as partials (no layout)
+- `views/error.p.hbs` is used for error responses (not registered as a route)
+- `{id}` segments in filenames/directories become dynamic path parameters
+- `layouts/`, `partials/`, and `i18n/` directories are skipped
 
 ### Configuration Options
 
@@ -75,13 +140,6 @@ config:
 - **Type:** Number
 - **Default:** 8080
 - **Description:** Port number for the HTTP server
-
-**Example:**
-
-```yaml
-config:
-  port: 3000
-```
 
 #### `config.server.limits`
 
@@ -111,212 +169,18 @@ File upload and request limits configuration.
 - **Default:** 10
 - **Description:** Maximum number of multipart parts allowed
 
-**Example:**
-
-```yaml
-config:
-  server:
-    limits:
-      files: 3 # Allow max 3 files
-      fileSize: 5242880 # 5MB per file
-      fieldSize: 524288 # 512KB per field
-      parts: 8 # Max 8 multipart parts
-```
-
-#### `config.api`
-
-Endpoint-specific configuration mapping. Keys use the format `"METHOD /path"`.
-
-##### `config.api.<endpoint>.output`
-
-Controls output formatting for specific endpoints.
-
-###### `config.api.<endpoint>.output.base64`
-
-- **Type:** Boolean
-- **Default:** false
-- **Description:** Return response as base64 encoded data (useful for binary content)
-
-##### `config.api.<endpoint>.response`
-
-Customize HTTP response for specific endpoints.
-
-###### `config.api.<endpoint>.response.status`
-
-- **Type:** Number or Object
-- **Default:** 200
-- **Description:** HTTP status code or mapping based on CLI exit codes
-
-###### `config.api.<endpoint>.response.headers`
-
-- **Type:** Object
-- **Description:** Custom HTTP headers to set in the response
-
-**Example:**
-
-```yaml
-config:
-  api:
-    "GET /user/avatar":
-      output:
-        base64: true
-      response:
-        status: 200
-        headers:
-          Content-Type: "image/png"
-          Cache-Control: "public, max-age=3600"
-
-    "POST /data/process":
-      response:
-        status:
-          0: 200 # Success
-          1: 500 # General error
-          2: 400 # Invalid input
-        headers:
-          Content-Type: "application/json"
-```
-
 #### `config.cors`
 
-Cross-Origin Resource Sharing (CORS) configuration.
-
-##### `config.cors.origin`
-
-- **Type:** String, Array, or Boolean
-- **Default:** Not set
-- **Description:** Allowed origins for CORS requests
-
-##### `config.cors.methods`
-
-- **Type:** Array of strings
-- **Default:** ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
-- **Description:** Allowed HTTP methods
-
-##### `config.cors.credentials`
-
-- **Type:** Boolean
-- **Default:** false
-- **Description:** Allow credentials in CORS requests
-
-**Example:**
-
-```yaml
-config:
-  cors:
-    origin:
-      - "https://app.example.com"
-      - "https://admin.example.com"
-    methods: ["GET", "POST", "PUT", "DELETE"]
-    credentials: true
-```
+Cross-Origin Resource Sharing (CORS) configuration. Passed directly to `@fastify/cors`.
 
 ### Environment Variables
 
-The server respects the following environment variables:
-
 - **`AUX4_API_PORT`**: Override the port (takes precedence over config file)
-- **`AUX4_API_HOST`**: Override the host (default: 0.0.0.0)
 
-### Examples
+### Static File Serving
 
-#### Basic Server Start
-
-```bash
-# Start with defaults (port 8080)
-aux4 api start
-```
-
-#### With Configuration File
-
-```bash
-# Start with custom configuration
-aux4 api start --config server.yaml
-```
-
-#### Override Port
-
-```bash
-# Start on port 3000
-aux4 api start --port 3000
-
-# With config file and port override
-aux4 api start --config config.yaml --port 9000
-```
-
-#### Full Configuration Example
-
-**config.yaml:**
-
-```yaml
-config:
-  port: 8080
-
-  # Server limits for file uploads
-  server:
-    limits:
-      files: 3 # Max 3 files per upload
-      fileSize: 5242880 # 5MB per file
-      fieldSize: 262144 # 256KB per field
-      parts: 6 # Max 6 multipart parts
-
-  # Endpoint-specific configuration
-  api:
-    # Image endpoint returning base64
-    "GET /image/generate":
-      output:
-        base64: true
-      response:
-        status: 201
-        headers:
-          Content-Type: "image/png"
-          Cache-Control: "no-cache"
-
-    # Data processing with custom status mapping
-    "POST /data/validate":
-      response:
-        status:
-          0: 200 # Valid data
-          1: 422 # Validation failed
-          2: 400 # Bad request
-        headers:
-          Content-Type: "application/json"
-
-  # CORS configuration
-  cors:
-    origin: "*"
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
-    credentials: false
-```
-
-**Start command:**
-
-```bash
-aux4 api start --config config.yaml
-```
-
-### Server Behavior
-
-#### API Endpoint Mapping
-
-- `/api/user/info` → `aux4 user info`
-- `/api/database/query?table=users` → `aux4 database query --table "users"`
-- `/api/file/process` (POST with body) → `aux4 file process` + request body
-
-#### Template Rendering
-
-- If `views/user/info.p.hbs` exists, `/api/user/info` returns rendered HTML
-- Otherwise returns JSON response from CLI command
-
-#### Static File Serving
-
-- Files in `static/` directory served at `/static/` URL prefix
-- Example: `static/css/app.css` → `http://localhost:8080/static/css/app.css`
-
-#### File Upload Processing
-
-- Uploaded files saved to temporary directory
-- Temporary directory path passed to CLI command via `--tmpDir` parameter
-- Upload limits enforced based on configuration
+Files in `static/` directory served at `/static/` URL prefix.
+Example: `static/css/app.css` → `http://localhost:8080/static/css/app.css`
 
 ### Exit Codes
 
