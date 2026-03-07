@@ -229,6 +229,73 @@ API routes (`/api/*`) with `Accept: application/json` return structured JSON err
 }
 ```
 
+## Command Timeout
+
+By default, commands time out after 30 seconds. Configure globally via `server.timeout` or per-route via `timeout`:
+
+```yaml
+config:
+  server:
+    timeout: 30000          # global default (ms)
+  api:
+    "GET /slow":
+      command: aux4 slow
+      timeout: 60000        # per-route override
+    "GET /fast":
+      command: aux4 fast
+      timeout: 5000
+```
+
+When a command times out, the server returns a 500 response.
+
+## SSE Streaming
+
+Routes with `stream: true` use Server-Sent Events to stream command stdout line by line:
+
+```yaml
+config:
+  api:
+    "GET /stream":
+      command: aux4 my-stream
+      stream: true
+```
+
+The response uses `text/event-stream` content type. Each stdout line is sent as `data: <line>\n\n`. When the command exits, an `event: done` message is sent. If the command exits with a non-zero code, an `event: error` message is sent before `done`.
+
+```bash
+curl http://localhost:8080/api/stream
+# data: line1
+# data: line2
+# event: done
+# data: stream complete
+```
+
+## Form URL-Encoded
+
+POST bodies with `Content-Type: application/x-www-form-urlencoded` are automatically parsed and included in the event body as JSON.
+
+```bash
+curl -X POST http://localhost:8080/api/form -d "name=Alice&age=30"
+```
+
+The command receives the parsed form data in `event.body` as a JSON string: `{"name":"Alice","age":"30"}`.
+
+## HTTPS/TLS
+
+Enable HTTPS by providing TLS certificate paths:
+
+```yaml
+config:
+  tls:
+    key: path/to/key.pem
+    cert: path/to/cert.pem
+```
+
+```bash
+aux4 api start --configFile config.yaml
+# aux4 api started on https://0.0.0.0:8080
+```
+
 ## Environment Variables
 
 - `AUX4_API_PORT` — override the port (takes precedence over config file)

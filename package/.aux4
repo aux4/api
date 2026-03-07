@@ -35,7 +35,7 @@
         {
           "name": "start",
           "execute": [
-            "node ${packageDir}/lib/server.js start values(port, cors, api, ws, server)"
+            "node ${packageDir}/lib/server.js start values(port, cors, api, ws, server, tls)"
           ],
           "help": {
             "text": "Start the aux4 API server",
@@ -64,6 +64,11 @@
               {
                 "name": "server",
                 "text": "Server configuration including file upload limits",
+                "default": ""
+              },
+              {
+                "name": "tls",
+                "text": "TLS configuration with key and cert file paths",
                 "default": ""
               }
             ]

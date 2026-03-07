@@ -9,6 +9,10 @@ The server supports:
 - **Convention-based views** using Handlebars templates from the `views/` directory
 - **Static file serving** from the `static/` directory
 - **File uploads** with configurable limits
+- **Command timeout** with global and per-route configuration
+- **SSE streaming** for long-running commands via `stream: true`
+- **Form URL-encoded** body parsing
+- **HTTPS/TLS** support via key and cert file paths
 
 #### Usage
 
@@ -68,3 +72,26 @@ The `command` field specifies the full shell command to execute. The API Gateway
 - **Command fails** — 500 with stdout/stderr as body
 
 REST API routes are served at `/api/*`. Views from `views/` are served as GET routes. Static files from `static/` are served at `/static/*`. WebSocket management API is available at `POST /@connections/:connectionId` and `DELETE /@connections/:connectionId`.
+
+#### Timeout
+
+Commands time out after 30 seconds by default. Set `server.timeout` for global override or `timeout` on individual routes.
+
+#### SSE Streaming
+
+Set `stream: true` on a route to stream command stdout as Server-Sent Events (`text/event-stream`).
+
+#### Form URL-Encoded
+
+`application/x-www-form-urlencoded` POST bodies are automatically parsed into JSON.
+
+#### HTTPS/TLS
+
+Provide `tls.key` and `tls.cert` file paths to enable HTTPS:
+
+```yaml
+config:
+  tls:
+    key: path/to/key.pem
+    cert: path/to/cert.pem
+```

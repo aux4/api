@@ -3,6 +3,8 @@
 ```file:config.yaml
 config:
   port: 18710
+  server:
+    timeout: 2000
   api:
     "GET /say":
       command: aux4 say
@@ -12,6 +14,13 @@ config:
       command: aux4 upload
     "GET /image":
       command: aux4 image
+    "GET /slow":
+      command: aux4 slow
+    "GET /stream":
+      command: aux4 stream-test
+      stream: true
+    "POST /form":
+      command: aux4 form-handler
 ```
 
 ```file:.aux4
@@ -55,6 +64,33 @@ config:
           ],
           "help": {
             "text": "Return a test image"
+          }
+        },
+        {
+          "name": "slow",
+          "execute": [
+            "sleep 5 && echo done"
+          ],
+          "help": {
+            "text": "Slow command for timeout testing"
+          }
+        },
+        {
+          "name": "stream-test",
+          "execute": [
+            "echo line1 && sleep 0.1 && echo line2 && sleep 0.1 && echo line3"
+          ],
+          "help": {
+            "text": "Stream test command"
+          }
+        },
+        {
+          "name": "form-handler",
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, headers: {\"Content-Type\": \"application/json\"}, body: ({name: ((.body | fromjson).name // \"unknown\"), age: ((.body | fromjson).age // \"unknown\")} | tostring)}'"
+          ],
+          "help": {
+            "text": "Handle form data"
           }
         }
       ]
@@ -236,4 +272,52 @@ curl -s http://localhost:18710/nonexistent
 
 ```expect:partial
 Error 404
+```
+
+## Timeout
+
+### should return 500 when command times out
+
+```execute
+curl -s -o /dev/null -w "%{http_code}" http://localhost:18710/api/slow
+```
+
+```expect
+500
+```
+
+### should handle concurrent requests while one hangs
+
+```execute
+curl -s http://localhost:18710/api/slow > /dev/null 2>&1 &
+sleep 0.2
+curl -s http://localhost:18710/api/say?name=Concurrent
+```
+
+```expect
+hello Concurrent
+```
+
+## Form URL-Encoded
+
+### should parse form-urlencoded body
+
+```execute
+curl -s -X POST http://localhost:18710/api/form -H "Content-Type: application/x-www-form-urlencoded" -d "name=Alice&age=30"
+```
+
+```expect
+{"name":"Alice","age":"30"}
+```
+
+## SSE Streaming
+
+### should return SSE data lines
+
+```execute
+curl -s -N http://localhost:18710/api/stream 2>/dev/null
+```
+
+```expect:partial
+data: line1
 ```
