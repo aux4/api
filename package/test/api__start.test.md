@@ -1,28 +1,6 @@
 # api start
 
-```beforeAll
-SERVER_JS="$(cd .. && pwd)/lib/server.js"
-TEST_DIR=$(mktemp -d)
-echo "$TEST_DIR" > .test-dir
-
-mkdir -p "$TEST_DIR/views/layouts" "$TEST_DIR/views/users" "$TEST_DIR/static"
-
-cat > "$TEST_DIR/say.js" << 'HANDLER'
-const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
-const name = (event.queryStringParameters && event.queryStringParameters.name) || "World";
-const response = { statusCode: 200, headers: { "Content-Type": "text/plain" }, body: "hello " + name };
-console.log(JSON.stringify(response));
-HANDLER
-
-cat > "$TEST_DIR/update-user.js" << 'HANDLER'
-const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
-const id = event.pathParameters && event.pathParameters.id;
-const body = event.body ? JSON.parse(event.body) : {};
-const response = { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id, name: body.name || "unknown" }) };
-console.log(JSON.stringify(response));
-HANDLER
-
-cat > "$TEST_DIR/.aux4" << 'AUX4'
+```file:.aux4
 {
   "profiles": [
     {
@@ -42,33 +20,74 @@ cat > "$TEST_DIR/.aux4" << 'AUX4'
     }
   ]
 }
-AUX4
+```
 
-echo '<html><body>{{{body}}}</body></html>' > "$TEST_DIR/views/layouts/main.hbs"
-echo '<h1>Hello Page</h1>' > "$TEST_DIR/views/hello.hbs"
-echo '<p>User {{id}}</p>' > "$TEST_DIR/views/users/{id}.hbs"
-echo '<div>Error {{statusCode}}: {{message}}</div>' > "$TEST_DIR/views/error.p.hbs"
-echo 'aux4-logo' > "$TEST_DIR/static/logo.txt"
+```file:say.js
+const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const name = (event.queryStringParameters && event.queryStringParameters.name) || "World";
+const response = { statusCode: 200, headers: { "Content-Type": "text/plain" }, body: "hello " + name };
+console.log(JSON.stringify(response));
+```
 
-API_JSON='{"GET /say":{"command":"say"},"POST /users/{id}":{"command":"update-user"}}'
-cat > "$TEST_DIR/start.sh" << SCRIPT
-#!/bin/sh
-cd "$TEST_DIR"
-node "$SERVER_JS" start 18710 '' '$API_JSON' &
-echo \$! > "$TEST_DIR/.pid"
-SCRIPT
-chmod +x "$TEST_DIR/start.sh"
-"$TEST_DIR/start.sh" </dev/null >/dev/null 2>&1
-sleep 1
+```file:update-user.js
+const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
+const id = event.pathParameters && event.pathParameters.id;
+const body = event.body ? JSON.parse(event.body) : {};
+const response = { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id, name: body.name || "unknown" }) };
+console.log(JSON.stringify(response));
+```
+
+```file:views/layouts/main.hbs
+<html><body>{{{body}}}</body></html>
+```
+
+```file:views/hello.hbs
+<h1>Hello Page</h1>
+```
+
+```file:views/users/{id}.hbs
+<p>User {{id}}</p>
+```
+
+```file:views/error.p.hbs
+<div>Error {{statusCode}}: {{message}}</div>
+```
+
+```file:static/logo.txt
+aux4-logo
+```
+
+```beforeAll
+mkdir -p views/layouts views/users static
 ```
 
 ```afterAll
-TEST_DIR=$(cat .test-dir)
-kill $(cat "$TEST_DIR/.pid") 2>/dev/null
-rm -rf "$TEST_DIR" .test-dir
+kill $(cat .pid) 2>/dev/null
+rm -f .pid start.sh
+rm -rf views static
 ```
 
 ## REST API
+
+### should have started server
+
+```execute
+SERVER_JS="$(cd .. && pwd)/lib/server.js"
+API_JSON='{"GET /say":{"command":"say"},"POST /users/{id}":{"command":"update-user"}}'
+cat > start.sh << SCRIPT
+#!/bin/sh
+node "$SERVER_JS" start 18710 '' '$API_JSON' &
+echo \$! > .pid
+SCRIPT
+chmod +x start.sh
+./start.sh </dev/null >/dev/null 2>&1
+sleep 1
+curl -s -o /dev/null -w "%{http_code}" http://localhost:18710/
+```
+
+```expect
+404
+```
 
 ### should respond with hello and query parameter
 
