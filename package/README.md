@@ -373,6 +373,16 @@ config:
 
 Rate limit headers are included in responses: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. Per-route limits add `X-RateLimit-Route-*` headers.
 
+**Important:** Rate limiting and IP allowlist use `request.ip`. Behind a reverse proxy (nginx, ALB), set `server.trustProxy` so Fastify reads the real client IP from forwarded headers:
+
+```yaml
+config:
+  server:
+    trustProxy: true           # or a specific address/range
+```
+
+See [Fastify trust proxy documentation](https://fastify.dev/docs/latest/Reference/Server/#trustproxy) for supported values.
+
 ### Security Headers (Helmet)
 
 Set `security.helmet: true` to enable security headers via `@fastify/helmet` (adds `X-Content-Type-Options`, `X-Frame-Options`, etc.). Pass an object for custom options:

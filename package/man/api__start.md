@@ -119,4 +119,4 @@ config:
       - 192.168.1.0/24
 ```
 
-Routes can be marked `public: true` to skip API key checks. Per-route `allowedIPs` replaces the global list. Per-route `rateLimit` is additive to global.
+Routes can be marked `public: true` to skip API key checks. Per-route `allowedIPs` replaces the global list. Per-route `rateLimit` is additive to global. Behind a reverse proxy, set `server.trustProxy: true` so `request.ip` reflects the real client IP.
