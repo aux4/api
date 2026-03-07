@@ -7,7 +7,7 @@ async function main() {
     const args = process.argv.slice(2);
 
     if (args.length === 0 || (args[0] !== 'start' && args[0] !== 'stop')) {
-      console.error('Usage: node index.js start|stop [port] [cors] [api] [ws] [server] [tls]');
+      console.error('Usage: node index.js start|stop [port] [cors] [api] [ws] [server] [tls] [security]');
       process.exit(1);
     }
 
@@ -64,6 +64,14 @@ async function main() {
         config.tls = JSON.parse(args[6]);
       } catch (error) {
         config.tls = args[6];
+      }
+    }
+
+    if (args[7]) {
+      try {
+        config.security = JSON.parse(args[7]);
+      } catch (error) {
+        config.security = args[7];
       }
     }
 

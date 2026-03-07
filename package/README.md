@@ -53,6 +53,14 @@ config:
     origin: "*"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
     credentials: false
+  security:
+    apiKey: my-secret-key
+    rateLimit:
+      max: 100
+      timeWindow: 60000
+    helmet: true
+    allowedIPs:
+      - 127.0.0.1
 ```
 
 ## REST API
@@ -294,6 +302,88 @@ config:
 ```bash
 aux4 api start --configFile config.yaml
 # aux4 api started on https://0.0.0.0:8080
+```
+
+## Security
+
+All security features are optional and config-driven. When no `security` key is present, the server runs without any security enforcement.
+
+```yaml
+config:
+  security:
+    apiKey: my-secret-key
+    header: X-API-Key          # optional, default X-API-Key
+    rateLimit:
+      max: 100
+      timeWindow: 60000        # milliseconds
+    helmet: true
+    allowedIPs:
+      - 127.0.0.1
+      - 192.168.1.0/24
+```
+
+### API Key Authentication
+
+When `security.apiKey` is set, all API and WebSocket routes require the key in the request header (default `X-API-Key`). WebSocket clients can also pass it as a `?apiKey=` query parameter.
+
+Mark individual routes as public to skip the API key check:
+
+```yaml
+config:
+  api:
+    "GET /health":
+      command: aux4 health
+      public: true
+```
+
+### Rate Limiting
+
+Global rate limiting applies to all requests. Per-route rate limiting is additive (both apply). Uses an in-memory sliding window keyed by client IP.
+
+```yaml
+config:
+  security:
+    rateLimit:
+      max: 100
+      timeWindow: 60000
+  api:
+    "POST /login":
+      command: aux4 login
+      rateLimit:
+        max: 5
+        timeWindow: 60000
+```
+
+Rate limit headers are included in responses: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. Per-route limits add `X-RateLimit-Route-*` headers.
+
+### Security Headers (Helmet)
+
+Set `security.helmet: true` to enable security headers via `@fastify/helmet` (adds `X-Content-Type-Options`, `X-Frame-Options`, etc.). Pass an object for custom options:
+
+```yaml
+config:
+  security:
+    helmet:
+      contentSecurityPolicy: false
+```
+
+### IP Allowlist
+
+Restrict access by client IP. Supports exact match and CIDR notation. IPv4-mapped IPv6 addresses (`::ffff:`) are normalized automatically.
+
+Per-route `allowedIPs` replaces the global list for that route:
+
+```yaml
+config:
+  security:
+    allowedIPs:
+      - 127.0.0.1
+      - 192.168.1.0/24
+  api:
+    "GET /admin":
+      command: aux4 admin
+      allowedIPs:
+        - 10.0.0.1
 ```
 
 ## Environment Variables

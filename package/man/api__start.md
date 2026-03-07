@@ -13,6 +13,7 @@ The server supports:
 - **SSE streaming** for long-running commands via `stream: true`
 - **Form URL-encoded** body parsing
 - **HTTPS/TLS** support via key and cert file paths
+- **Security** features: API key authentication, rate limiting, security headers (Helmet), and IP allowlist
 
 #### Usage
 
@@ -95,3 +96,23 @@ config:
     key: path/to/key.pem
     cert: path/to/cert.pem
 ```
+
+#### Security
+
+API key authentication, rate limiting, security headers, and IP allowlist. All features are optional.
+
+```yaml
+config:
+  security:
+    apiKey: my-secret-key
+    header: X-API-Key
+    rateLimit:
+      max: 100
+      timeWindow: 60000
+    helmet: true
+    allowedIPs:
+      - 127.0.0.1
+      - 192.168.1.0/24
+```
+
+Routes can be marked `public: true` to skip API key checks. Per-route `allowedIPs` replaces the global list. Per-route `rateLimit` is additive to global.
