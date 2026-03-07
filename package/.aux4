@@ -3,9 +3,16 @@
   "name": "api",
   "version": "0.1.2",
   "description": "aux4 API",
+  "license": "Apache-2.0",
   "tags": [
     "api",
     "aux4"
+  ],
+  "dependencies": [
+    "aux4/config"
+  ],
+  "system": [
+    ["test:node --version", "brew:node", "linux:nodejs"]
   ],
   "profiles": [
     {
