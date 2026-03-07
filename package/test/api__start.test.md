@@ -1,5 +1,17 @@
 # api start
 
+```file:config.yaml
+config:
+  port: 18710
+  api:
+    "GET /say":
+      command: aux4 say
+    "POST /users/{id}":
+      command: aux4 update-user
+    "POST /upload":
+      command: aux4 upload
+```
+
 ```file:.aux4
 {
   "profiles": [
@@ -8,33 +20,35 @@
       "commands": [
         {
           "name": "say",
-          "execute": ["stdin:node say.js"],
-          "help": { "text": "Say hello" }
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, headers: {\"Content-Type\": \"text/plain\"}, body: (\"hello \" + (.queryStringParameters.name // \"World\"))}'"
+          ],
+          "help": {
+            "text": "Say hello"
+          }
         },
         {
           "name": "update-user",
-          "execute": ["stdin:node update-user.js"],
-          "help": { "text": "Update a user" }
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, headers: {\"Content-Type\": \"application/json\"}, body: ({id: .pathParameters.id, name: ((.body | fromjson).name // \"unknown\")} | tostring)}'"
+          ],
+          "help": {
+            "text": "Update a user"
+          }
+        },
+        {
+          "name": "upload",
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, headers: {\"Content-Type\": \"application/json\"}, body: ({files: [(.body | fromjson).document[].filename], category: ((.body | fromjson).category // \"none\")} | tostring)}'"
+          ],
+          "help": {
+            "text": "Handle upload"
+          }
         }
       ]
     }
   ]
 }
-```
-
-```file:say.js
-const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
-const name = (event.queryStringParameters && event.queryStringParameters.name) || "World";
-const response = { statusCode: 200, headers: { "Content-Type": "text/plain" }, body: "hello " + name };
-console.log(JSON.stringify(response));
-```
-
-```file:update-user.js
-const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
-const id = event.pathParameters && event.pathParameters.id;
-const body = event.body ? JSON.parse(event.body) : {};
-const response = { statusCode: 200, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: id, name: body.name || "unknown" }) };
-console.log(JSON.stringify(response));
 ```
 
 ```file:views/layouts/main.hbs
@@ -62,9 +76,8 @@ mkdir -p views/layouts views/users static
 ```
 
 ```afterAll
-kill $(cat .pid) 2>/dev/null
-rm -f .pid start.sh
-rm -rf views static
+aux4 api stop 2>/dev/null
+rm -rf views static .tmp
 ```
 
 ## REST API
@@ -72,15 +85,7 @@ rm -rf views static
 ### should have started server
 
 ```execute
-SERVER_JS="$(cd .. && pwd)/lib/server.js"
-API_JSON='{"GET /say":{"command":"say"},"POST /users/{id}":{"command":"update-user"}}'
-cat > start.sh << SCRIPT
-#!/bin/sh
-node "$SERVER_JS" start 18710 '' '$API_JSON' &
-echo \$! > .pid
-SCRIPT
-chmod +x start.sh
-./start.sh </dev/null >/dev/null 2>&1
+nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
 sleep 1
 curl -s -o /dev/null -w "%{http_code}" http://localhost:18710/
 ```
@@ -127,6 +132,20 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:18710/api/unknown
 
 ```expect
 404
+```
+
+## File upload
+
+### should handle multipart file upload
+
+```execute
+echo "test content" > /tmp/test-upload.txt
+curl -s -X POST http://localhost:18710/api/upload -F "document=@/tmp/test-upload.txt" -F "category=reports"
+rm -f /tmp/test-upload.txt
+```
+
+```expect:partial
+test-upload.txt
 ```
 
 ## Views

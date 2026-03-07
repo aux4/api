@@ -1,5 +1,15 @@
 # api start websocket
 
+```file:config.yaml
+config:
+  port: 18711
+  ws:
+    "/ws":
+      routes:
+        $default: aux4 ws-echo
+        echo: aux4 ws-echo
+```
+
 ```file:.aux4
 {
   "profiles": [
@@ -8,20 +18,17 @@
       "commands": [
         {
           "name": "ws-echo",
-          "execute": ["stdin:node ws-echo.js"],
-          "help": { "text": "WS echo" }
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, body: ({echo: ((.body | fromjson).message // \"no message\"), route: .requestContext.routeKey} | tostring)}'"
+          ],
+          "help": {
+            "text": "WS echo"
+          }
         }
       ]
     }
   ]
 }
-```
-
-```file:ws-echo.js
-const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
-const body = event.body ? JSON.parse(event.body) : {};
-const response = { statusCode: 200, body: JSON.stringify({ echo: body.message || "no message", route: event.requestContext.routeKey }) };
-console.log(JSON.stringify(response));
 ```
 
 ```file:ws-client.js
@@ -40,8 +47,8 @@ w.on("error", (e) => { console.error("ws error:", e.message); clearTimeout(t); p
 ```
 
 ```afterAll
-kill $(cat .pid-ws) 2>/dev/null
-rm -f .pid-ws start-ws.sh
+aux4 api stop 2>/dev/null
+rm -rf .tmp
 ```
 
 ## WebSocket
@@ -49,15 +56,7 @@ rm -f .pid-ws start-ws.sh
 ### should have started server
 
 ```execute
-SERVER_JS="$(cd .. && pwd)/lib/server.js"
-WS_ARG='{"/ws":{"routes":{"$default":"ws-echo","echo":"ws-echo"}}}'
-cat > start-ws.sh << SCRIPT
-#!/bin/sh
-node "$SERVER_JS" start 18711 '' '' '$WS_ARG' &
-echo \$! > .pid-ws
-SCRIPT
-chmod +x start-ws.sh
-./start-ws.sh </dev/null >/dev/null 2>&1
+nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
 sleep 1
 curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/
 ```

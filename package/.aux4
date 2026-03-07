@@ -61,6 +61,15 @@
               }
             ]
           }
+        },
+        {
+          "name": "stop",
+          "execute": [
+            "node ${packageDir}/lib/server.js stop"
+          ],
+          "help": {
+            "text": "Stop the aux4 API server"
+          }
         }
       ]
     }

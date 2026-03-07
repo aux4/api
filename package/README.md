@@ -33,16 +33,16 @@ config:
       parts: 10
   api:
     "GET /say":
-      command: say
+      command: aux4 say
     "POST /users/{id}":
-      command: update-user
+      command: aux4 update-user
   ws:
     "/chat":
       routes:
-        $connect: chat-connect
-        $disconnect: chat-disconnect
-        $default: chat-message
-        sendMessage: chat-send
+        $connect: aux4 chat-connect
+        $disconnect: aux4 chat-disconnect
+        $default: aux4 chat-message
+        sendMessage: aux4 chat-send
   cors:
     origin: "*"
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]

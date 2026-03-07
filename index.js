@@ -6,9 +6,14 @@ async function main() {
   try {
     const args = process.argv.slice(2);
 
-    if (args.length === 0 || args[0] !== 'start') {
-      console.error('Usage: node index.js start [port] [cors] [api] [ws] [server]');
+    if (args.length === 0 || (args[0] !== 'start' && args[0] !== 'stop')) {
+      console.error('Usage: node index.js start|stop [port] [cors] [api] [ws] [server]');
       process.exit(1);
+    }
+
+    if (args[0] === 'stop') {
+      Server.stopByPid();
+      return;
     }
 
     const config = {};
