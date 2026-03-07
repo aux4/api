@@ -10,6 +10,8 @@ config:
       command: aux4 update-user
     "POST /upload":
       command: aux4 upload
+    "GET /image":
+      command: aux4 image
 ```
 
 ```file:.aux4
@@ -43,6 +45,16 @@ config:
           ],
           "help": {
             "text": "Handle upload"
+          }
+        },
+        {
+          "name": "image",
+          "execute": [
+            "nout:base64 -i static/logo.txt",
+            "log:data:text/plain;filename=logo.txt;base64,${response}"
+          ],
+          "help": {
+            "text": "Return a test image"
           }
         }
       ]
@@ -146,6 +158,38 @@ rm -f /tmp/test-upload.txt
 
 ```expect:partial
 test-upload.txt
+```
+
+## Data URI response
+
+### should return binary data with correct content type
+
+```execute
+curl -s -o /dev/null -w "%{content_type}" http://localhost:18710/api/image
+```
+
+```expect
+text/plain
+```
+
+### should return content disposition with filename
+
+```execute
+curl -s -o /dev/null -D - http://localhost:18710/api/image | grep -i content-disposition
+```
+
+```expect:partial
+logo.txt
+```
+
+### should return decoded content
+
+```execute
+curl -s http://localhost:18710/api/image
+```
+
+```expect
+aux4-logo
 ```
 
 ## Views

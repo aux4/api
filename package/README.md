@@ -1,11 +1,11 @@
 # Aux4 API Server
 
-A Fastify-based HTTP server that bridges web requests to aux4 CLI commands using an AWS API Gateway-compatible request/response format. Supports REST APIs, WebSocket connections, convention-based Handlebars views, and static file serving.
+A Fastify-based HTTP server that bridges web requests to CLI commands using an AWS API Gateway-compatible request/response format. Supports REST APIs, WebSocket connections, convention-based Handlebars views, and static file serving.
 
 ## Installation
 
 ```bash
-aux4 install aux4/api
+aux4 aux4 pkger install aux4/api
 ```
 
 ## Quick Start
@@ -17,7 +17,13 @@ aux4 api start
 With a configuration file:
 
 ```bash
-aux4 api start --configFile config.yaml --port 3000
+aux4 api start --configFile config.yaml
+```
+
+Stop the server:
+
+```bash
+aux4 api stop
 ```
 
 ## Configuration
@@ -51,11 +57,11 @@ config:
 
 ## REST API
 
-Routes are defined in `config.api` with the format `"METHOD /path"`. Path parameters use `{name}` syntax.
+Routes are defined in `config.api` with the format `"METHOD /path"`. Path parameters use `{name}` syntax. The `command` field specifies the full shell command to execute.
 
 When a request matches a route:
 
-1. An AWS API Gateway-style event is built and piped to the aux4 command via stdin
+1. An AWS API Gateway-style event is built and piped to the command via stdin
 2. The command returns an API Gateway-compatible response on stdout
 
 ### Event Format (stdin)
@@ -81,6 +87,18 @@ When a request matches a route:
 
 ### Response Format (stdout)
 
+The command output is handled based on its format:
+
+| Output | Behavior |
+|--------|----------|
+| JSON with `statusCode` | API Gateway response (status, headers, body) |
+| JSON without `statusCode` | 200 with JSON body |
+| Plain text | 200 with text body |
+| `data:<mimetype>;base64,<data>` | Binary response with auto Content-Type |
+| Command fails (non-zero exit) | 500 with stdout/stderr as body |
+
+#### API Gateway response
+
 ```json
 {
   "statusCode": 200,
@@ -89,29 +107,34 @@ When a request matches a route:
 }
 ```
 
-### Example
+#### Plain text
 
-**.aux4:**
+```
+hello Joe
+```
+
+#### Data URI (binary files)
+
+```
+data:image/png;filename=photo.png;base64,iVBORw0KGgo...
+```
+
+The `filename` parameter is optional. Sets `Content-Type` and `Content-Disposition` automatically.
+
+### Examples
+
+**Plain text response:**
 
 ```json
 {
   "name": "say",
-  "execute": ["stdin:node say-handler.js"],
-  "help": { "text": "Say hello" }
+  "execute": [
+    "stdin:jq -rc '\"hello \" + (.queryStringParameters.name // \"World\")'"
+  ],
+  "help": {
+    "text": "Say hello"
+  }
 }
-```
-
-**say-handler.js:**
-
-```javascript
-const event = JSON.parse(require("fs").readFileSync(0, "utf8"));
-const name = event.queryStringParameters?.name || "World";
-const response = {
-  statusCode: 200,
-  headers: { "Content-Type": "text/plain" },
-  body: `hello ${name}`
-};
-console.log(JSON.stringify(response));
 ```
 
 ```bash
@@ -119,11 +142,32 @@ curl http://localhost:8080/api/say?name=Joe
 # hello Joe
 ```
 
+**Binary file response:**
+
+```json
+{
+  "name": "image",
+  "execute": [
+    "nout:base64 -i photo.png",
+    "log:data:image/png;filename=photo.png;base64,${response}"
+  ],
+  "help": {
+    "text": "Return an image"
+  }
+}
+```
+
+```bash
+curl http://localhost:8080/api/image -o photo.png
+```
+
 ## WebSocket Support
 
-WebSocket routes are defined in `config.ws`. Each path maps lifecycle events and custom actions to aux4 commands.
+WebSocket routes are defined in `config.ws`. Each path maps lifecycle events and custom actions to commands.
 
 ### Route Keys
+
+All route keys are optional:
 
 - `$connect` — fired when a client connects
 - `$disconnect` — fired when a client disconnects
