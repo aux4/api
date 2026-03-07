@@ -1,7 +1,7 @@
 {
   "scope": "aux4",
   "name": "api",
-  "version": "0.1.2",
+  "version": "2.0.0",
   "description": "aux4 API",
   "license": "Apache-2.0",
   "tags": [
