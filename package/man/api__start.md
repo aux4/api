@@ -74,6 +74,10 @@ The `command` field specifies the full shell command to execute. The API Gateway
 
 REST API routes are served at `/api/*`. Views from `views/` are served as GET routes. Static files from `static/` are served at `/static/*`. WebSocket management API is available at `POST /@connections/:connectionId` and `DELETE /@connections/:connectionId`.
 
+#### Command Concurrency
+
+Limits concurrent child processes to prevent resource exhaustion. Configurable via `server.maxConcurrency` (default: 50) and `server.maxQueue` (default: 200). Returns 503 when the queue is full.
+
 #### Timeout
 
 Commands time out after 30 seconds by default. Set `server.timeout` for global override or `timeout` on individual routes.

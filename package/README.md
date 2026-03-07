@@ -239,6 +239,21 @@ API routes (`/api/*`) with `Accept: application/json` return structured JSON err
 
 ## Command Timeout
 
+## Command Concurrency
+
+Each request spawns a child process. To prevent resource exhaustion, the server limits concurrent command executions:
+
+```yaml
+config:
+  server:
+    maxConcurrency: 50        # max concurrent commands (default: 50)
+    maxQueue: 200             # max queued requests waiting for a slot (default: 200)
+```
+
+When all slots are busy, requests queue until a slot opens (respecting their timeout). If the queue is full, the server returns `503 Service Unavailable` immediately.
+
+## Command Timeout
+
 By default, commands time out after 30 seconds. Configure globally via `server.timeout` or per-route via `timeout`:
 
 ```yaml
@@ -325,6 +340,8 @@ config:
 ### API Key Authentication
 
 When `security.apiKey` is set, all API and WebSocket routes require the key in the request header (default `X-API-Key`). WebSocket clients can also pass it as a `?apiKey=` query parameter.
+
+**Note:** Query parameter API keys may be logged by reverse proxies, load balancers, and CDNs. Prefer the header when possible.
 
 Mark individual routes as public to skip the API key check:
 
