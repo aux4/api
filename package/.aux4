@@ -1,7 +1,7 @@
 {
   "scope": "aux4",
   "name": "api",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "aux4 API",
   "license": "Apache-2.0",
   "tags": [
@@ -12,7 +12,11 @@
     "aux4/config"
   ],
   "system": [
-    ["test:node --version", "brew:node", "linux:nodejs"]
+    [
+      "test:node --version",
+      "brew:node",
+      "linux:nodejs"
+    ]
   ],
   "profiles": [
     {
