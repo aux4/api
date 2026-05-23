@@ -13,7 +13,7 @@ config:
     "POST /upload":
       command: aux4 upload
     "GET /image":
-      command: aux4 image
+      command: aux4 test-image
     "GET /slow":
       command: aux4 slow
     "GET /stream":
@@ -57,7 +57,7 @@ config:
           }
         },
         {
-          "name": "image",
+          "name": "test-image",
           "execute": [
             "nout:base64 -i static/logo.txt",
             "log:data:text/plain;filename=logo.txt;base64,${response}"
