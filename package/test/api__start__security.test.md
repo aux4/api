@@ -6,8 +6,10 @@ config:
   server:
     timeout: 2000
   security:
-    apiKey: test-secret-key
-    header: X-API-Key
+    auth:
+      type: apiKey
+      apiKey: test-secret-key
+      header: X-API-Key
     rateLimit:
       max: 100
       timeWindow: 60000

@@ -32,150 +32,315 @@ aux4 api stop
 config:
   port: 8080
   server:
+    timeout: 30000
+    maxConcurrency: 50
+    maxQueue: 200
+    trustProxy: true
+    media: ./media
     limits:
+      bodySize: 1048576
       files: 5
       fileSize: 10485760
       fieldSize: 1048576
       parts: 10
-  api:
-    "GET /say":
-      command: aux4 say
-    "POST /users/{id}":
-      command: aux4 update-user
-  ws:
-    "/chat":
-      routes:
-        $connect: aux4 chat-connect
-        $disconnect: aux4 chat-disconnect
-        $default: aux4 chat-message
-        sendMessage: aux4 chat-send
-  cors:
-    origin: "*"
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
-    credentials: false
   security:
-    apiKey: my-secret-key
+    auth:
+      type: cookie
+      command: aux4 auth validate
+      cookie: auth_token
+      redirect: /auth/signin
     rateLimit:
       max: 100
       timeWindow: 60000
     helmet: true
     allowedIPs:
       - 127.0.0.1
+  cors:
+    origin: "*"
+  tls:
+    key: path/to/key.pem
+    cert: path/to/cert.pem
+  production: false
+  api:
+    "GET /contacts":
+      command: aux4 contacts list
+    "POST /contacts":
+      command: aux4 contacts create
+      redirect: /contacts
+    "DELETE /contacts/{id}":
+      command: aux4 contacts delete
+      redirect: /contacts
+  ws:
+    "/chat":
+      routes:
+        $connect: aux4 chat-connect
+        $disconnect: aux4 chat-disconnect
+        $default: aux4 chat-message
 ```
 
 ## REST API
 
-Routes are defined in `config.api` with the format `"METHOD /path"`. Path parameters use `{name}` syntax. The `command` field specifies the full shell command to execute.
+Routes are defined in `config.api` with the format `"METHOD /path"`. Path parameters use `{name}` syntax.
 
-When a request matches a route:
+### Command Variables
 
-1. An AWS API Gateway-style event is built and piped to the command via stdin
-2. The command returns an API Gateway-compatible response on stdout
+Request data is automatically injected as command variables:
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `${params.id}` | Path parameters | From `{id}` in route |
+| `${query.search}` | Query string parameters | From `?search=...` |
+| `${body.name}` | Request body fields | From form/JSON body |
+| `${headers.authorization}` | Request headers | Any header |
+| `${cookies.token}` | Request cookies | Any cookie |
+| `${principal.email}` | Authenticated user info | From auth command |
+
+Use `value()` for safe shell quoting: `value(params.id)`, `value(body)`.
 
 ### Event Format (stdin)
 
-```json
-{
-  "httpMethod": "GET",
-  "path": "/say",
-  "headers": { ... },
-  "queryStringParameters": { "name": "Joe" },
-  "multiValueQueryStringParameters": { "name": ["Joe"] },
-  "pathParameters": null,
-  "body": null,
-  "isBase64Encoded": false,
-  "requestContext": {
-    "httpMethod": "GET",
-    "path": "/api/say",
-    "requestId": "uuid",
-    "identity": { "sourceIp": "127.0.0.1" }
-  }
-}
-```
+The full AWS API Gateway-style event is also piped to the command via stdin for backward compatibility.
 
 ### Response Format (stdout)
-
-The command output is handled based on its format:
 
 | Output | Behavior |
 |--------|----------|
 | JSON with `statusCode` | API Gateway response (status, headers, body) |
-| JSON without `statusCode` | 200 with JSON body |
+| JSON without `statusCode` | 200 with JSON body (or rendered partial if views exist) |
 | Plain text | 200 with text body |
 | `data:<mimetype>;base64,<data>` | Binary response with auto Content-Type |
-| Command fails (non-zero exit) | 500 with stdout/stderr as body |
+| Command fails (non-zero exit) | 500 with generic error message |
 
-#### API Gateway response
+### Route Options
+
+```yaml
+"GET /endpoint":
+  command: aux4 my-command
+  public: true              # skip authentication
+  timeout: 60000            # override default timeout
+  stream: true              # enable SSE streaming
+  redirect: /other          # redirect after success
+  setCookie:                # set cookie from response
+    name: auth_token
+    field: token
+  clearCookie: auth_token   # clear a cookie
+  rateLimit:                # per-route rate limiting
+    max: 5
+    timeWindow: 60000
+  allowedIPs:               # per-route IP allowlist
+    - 10.0.0.1
+```
+
+Routes without a `command` field can still use `clearCookie` and `redirect` (useful for logout):
+
+```yaml
+"POST /auth/logout":
+  public: true
+  clearCookie: auth_token
+  redirect: /auth/signin
+```
+
+### Redirect
+
+After a successful command, `redirect` executes the target route's command and returns its response. If the target has a matching partial template, it renders HTML.
+
+## Authentication
+
+Configure authentication in `security.auth`:
+
+```yaml
+config:
+  security:
+    auth:
+      type: cookie          # cookie | bearer | apiKey | both
+      command: aux4 auth validate
+      cookie: auth_token    # cookie name (for cookie/both types)
+      redirect: /auth/signin # render this partial on 401
+```
+
+### Auth Types
+
+| Type | Description |
+|------|-------------|
+| `cookie` | Reads token from an httpOnly cookie |
+| `bearer` | Reads token from `Authorization: Bearer <token>` header |
+| `apiKey` | Static API key comparison (no command needed) |
+| `both` | Cookie first, bearer fallback (default) |
+
+### Cookie Auth
+
+```yaml
+security:
+  auth:
+    type: cookie
+    command: aux4 auth validate
+    cookie: auth_token
+    redirect: /auth/signin
+```
+
+The auth command receives `--cookies` and `--headers` and should return a JSON object with user info (the principal) on success, or exit with non-zero on failure:
 
 ```json
-{
-  "statusCode": 200,
-  "headers": { "Content-Type": "text/plain" },
-  "body": "hello Joe"
-}
+{"email": "user@example.com"}
 ```
 
-#### Plain text
+The principal is injected as `--principal` into route commands, accessible via `${principal.email}`.
 
-```
-hello Joe
-```
+### Cookie Management
 
-#### Data URI (binary files)
+Set cookies from command responses:
 
-```
-data:image/png;filename=photo.png;base64,iVBORw0KGgo...
-```
-
-The `filename` parameter is optional. Sets `Content-Type` and `Content-Disposition` automatically.
-
-### Examples
-
-**Plain text response:**
-
-```json
-{
-  "name": "say",
-  "execute": [
-    "stdin:jq -rc '\"hello \" + (.queryStringParameters.name // \"World\")'"
-  ],
-  "help": {
-    "text": "Say hello"
-  }
-}
+```yaml
+"POST /auth/signin":
+  command: aux4 auth signin
+  public: true
+  setCookie:
+    name: auth_token
+    field: token
+  redirect: /contacts
 ```
 
-```bash
-curl http://localhost:8080/api/say?name=Joe
-# hello Joe
+The command returns `{"token": "UUID", "email": "user@example.com"}`. The API extracts the `token` field and sets it as an httpOnly cookie. In production mode, the `Secure` flag is added.
+
+### API Key Auth
+
+```yaml
+security:
+  auth:
+    type: apiKey
+    apiKey: my-secret-key
+    header: X-API-Key
 ```
 
-**Binary file response:**
+Uses timing-safe comparison. No principal is set for API key auth.
 
-```json
-{
-  "name": "image",
-  "execute": [
-    "nout:base64 -i photo.png",
-    "log:data:image/png;filename=photo.png;base64,${response}"
-  ],
-  "help": {
-    "text": "Return an image"
-  }
-}
+### Bearer Auth
+
+```yaml
+security:
+  auth:
+    type: bearer
+    command: aux4 auth validate
 ```
 
-```bash
-curl http://localhost:8080/api/image -o photo.png
+Reads from `Authorization: Bearer <token>` header.
+
+## Convention-Based Views
+
+Handlebars templates in the `views/` directory are automatically registered as GET routes:
+
+| File | Route | Layout |
+|------|-------|--------|
+| `views/index.hbs` | `GET /` | Yes |
+| `views/about.hbs` | `GET /about` | Yes |
+| `views/users/{id}.hbs` | `GET /users/:id` | Yes |
+| `views/greet.p.hbs` | `GET /greet` | No |
+
+- `.hbs` files render with the layout (`views/layouts/main.hbs`)
+- `.p.hbs` files render as partials (no layout wrapper)
+- `views/error.p.hbs` is used for error responses (not registered as a route)
+- `{id}` segments in filenames/directories become path parameters
+- `layouts/`, `partials/`, and `i18n/` directories are skipped
+
+### Partial Auto-Rendering
+
+When an API command returns JSON and a matching `.p.hbs` partial exists, the server renders it as HTML automatically. The convention maps command names to template paths:
+
+| Command | Partial |
+|---------|---------|
+| `aux4 contacts list` | `views/contacts/list.p.hbs` |
+| `aux4 contacts get` | `views/contacts/get.p.hbs` |
+| `aux4 auth signin` | `views/auth/signin.p.hbs` |
+
+The JSON response is available in the template as `data`:
+
+```handlebars
+{{#each data}}
+  <tr><td>{{firstName}}</td><td>{{phone}}</td></tr>
+{{/each}}
 ```
+
+Clients requesting `Accept: application/json` receive raw JSON instead.
+
+### SPA Catch-All
+
+When `views/index.hbs` exists, unmatched GET requests (non-API, non-static) serve the index page. This supports client-side URL routing with `hx-push-url`.
+
+## Error Handling
+
+### Error Redirects
+
+Configure redirects for specific HTTP status codes:
+
+```yaml
+config:
+  security:
+    auth:
+      redirect: /auth/signin    # shorthand for 401 redirect
+    errorRedirects:
+      "404": /errors/not-found  # renders views/errors/not-found.p.hbs
+      "500": /errors/server     # renders views/errors/server.p.hbs
+```
+
+### Error Templates
+
+Error templates are checked in order:
+
+1. **Error redirect** — configured redirect path renders a partial (returns 200)
+2. **Status template** — `views/401.p.hbs`, `views/404.p.hbs`, etc.
+3. **Generic template** — `views/error.p.hbs` (receives `statusCode`, `message`, `error`)
+4. **JSON fallback** — structured JSON for `Accept: application/json`
+
+### Error Suppression
+
+Command failures (non-zero exit) return a generic `500 Internal Server Error` message. Internal details (stderr, stack traces) are never exposed to clients.
+
+## Static File Serving
+
+Files in the `static/` directory are served at `/static/`:
+
+```
+static/css/app.css → http://localhost:8080/static/css/app.css
+```
+
+### Uploads Directory
+
+Configure a directory for user-uploaded files:
+
+```yaml
+config:
+  server:
+    media: ./media
+```
+
+Files are served at `/media/`:
+
+```
+media/photo.jpg → http://localhost:8080/media/photo.jpg
+```
+
+## Production Mode
+
+Enable with `--production true` in config:
+
+```yaml
+config:
+  production: true
+```
+
+Production mode enables:
+- `Secure` flag on cookies (requires HTTPS)
+- Template caching without filesystem checks (faster, requires restart for changes)
+
+Development mode (default):
+- No `Secure` flag (cookies work on HTTP localhost)
+- Template caching with mtime check (edit templates, see changes immediately)
 
 ## WebSocket Support
 
 WebSocket routes are defined in `config.ws`. Each path maps lifecycle events and custom actions to commands.
 
 ### Route Keys
-
-All route keys are optional:
 
 - `$connect` — fired when a client connects
 - `$disconnect` — fired when a client disconnects
@@ -187,93 +352,9 @@ All route keys are optional:
 - `POST /@connections/:connectionId` — send a message to a specific connection
 - `DELETE /@connections/:connectionId` — disconnect a specific connection
 
-## Convention-Based Views
-
-Handlebars templates in the `views/` directory are automatically registered as GET routes:
-
-| File | Route | Parameters |
-|------|-------|------------|
-| `views/index.hbs` | `GET /` | none |
-| `views/about.hbs` | `GET /about` | none |
-| `views/users/{id}.hbs` | `GET /users/:id` | `{ id }` |
-| `views/greet.p.hbs` | `GET /greet` | none (no layout) |
-
-- `.hbs` files render with the layout (`views/layouts/main.hbs`)
-- `.p.hbs` files render as partials (no layout)
-- `views/error.p.hbs` is used for error responses (not registered as a route)
-- `{id}` segments in filenames/directories become dynamic path parameters
-- `layouts/`, `partials/`, and `i18n/` directories are skipped
-
-## Static File Serving
-
-Files in the `static/` directory are served at the `/static/` URL prefix.
-
-```
-static/css/app.css → http://localhost:8080/static/css/app.css
-```
-
-## Error Handling
-
-### Error Template
-
-Create `views/error.p.hbs` to customize error pages:
-
-```html
-<div>Error {{statusCode}}: {{message}}</div>
-```
-
-Error templates receive `statusCode`, `message`, and `error` variables.
-
-### API Errors
-
-API routes (`/api/*`) with `Accept: application/json` return structured JSON errors:
-
-```json
-{
-  "error": {
-    "message": "Route not found",
-    "status": 404
-  }
-}
-```
-
-## Command Timeout
-
-## Command Concurrency
-
-Each request spawns a child process. To prevent resource exhaustion, the server limits concurrent command executions:
-
-```yaml
-config:
-  server:
-    maxConcurrency: 50        # max concurrent commands (default: 50)
-    maxQueue: 200             # max queued requests waiting for a slot (default: 200)
-```
-
-When all slots are busy, requests queue until a slot opens (respecting their timeout). If the queue is full, the server returns `503 Service Unavailable` immediately.
-
-## Command Timeout
-
-By default, commands time out after 30 seconds. Configure globally via `server.timeout` or per-route via `timeout`:
-
-```yaml
-config:
-  server:
-    timeout: 30000          # global default (ms)
-  api:
-    "GET /slow":
-      command: aux4 slow
-      timeout: 60000        # per-route override
-    "GET /fast":
-      command: aux4 fast
-      timeout: 5000
-```
-
-When a command times out, the server returns a 500 response.
-
 ## SSE Streaming
 
-Routes with `stream: true` use Server-Sent Events to stream command stdout line by line:
+Routes with `stream: true` use Server-Sent Events:
 
 ```yaml
 config:
@@ -283,79 +364,11 @@ config:
       stream: true
 ```
 
-The response uses `text/event-stream` content type. Each stdout line is sent as `data: <line>\n\n`. When the command exits, an `event: done` message is sent. If the command exits with a non-zero code, an `event: error` message is sent before `done`.
+Each stdout line is sent as `data: <line>\n\n`. On exit, `event: done` is sent.
 
-```bash
-curl http://localhost:8080/api/stream
-# data: line1
-# data: line2
-# event: done
-# data: stream complete
-```
+## Rate Limiting
 
-## Form URL-Encoded
-
-POST bodies with `Content-Type: application/x-www-form-urlencoded` are automatically parsed and included in the event body as JSON.
-
-```bash
-curl -X POST http://localhost:8080/api/form -d "name=Alice&age=30"
-```
-
-The command receives the parsed form data in `event.body` as a JSON string: `{"name":"Alice","age":"30"}`.
-
-## HTTPS/TLS
-
-Enable HTTPS by providing TLS certificate paths:
-
-```yaml
-config:
-  tls:
-    key: path/to/key.pem
-    cert: path/to/cert.pem
-```
-
-```bash
-aux4 api start --configFile config.yaml
-# aux4 api started on https://0.0.0.0:8080
-```
-
-## Security
-
-All security features are optional and config-driven. When no `security` key is present, the server runs without any security enforcement.
-
-```yaml
-config:
-  security:
-    apiKey: my-secret-key
-    header: X-API-Key          # optional, default X-API-Key
-    rateLimit:
-      max: 100
-      timeWindow: 60000        # milliseconds
-    helmet: true
-    allowedIPs:
-      - 127.0.0.1
-      - 192.168.1.0/24
-```
-
-### API Key Authentication
-
-When `security.apiKey` is set, all API and WebSocket routes require the key in the request header (default `X-API-Key`). WebSocket clients can also pass it as a `?apiKey=` query parameter.
-
-**Note:** Query parameter API keys may be logged by reverse proxies, load balancers, and CDNs. Prefer the header when possible.
-
-Mark individual routes as public to skip the API key check:
-
-```yaml
-config:
-  api:
-    "GET /health":
-      command: aux4 health
-      public: true
-```
-
-### Rate Limiting
-
-Global rate limiting applies to all requests. Per-route rate limiting is additive (both apply). Uses an in-memory sliding window keyed by client IP.
+Global and per-route rate limiting with sliding window by client IP:
 
 ```yaml
 config:
@@ -371,34 +384,9 @@ config:
         timeWindow: 60000
 ```
 
-Rate limit headers are included in responses: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`. Per-route limits add `X-RateLimit-Route-*` headers.
+Headers: `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
 
-**Important:** Rate limiting and IP allowlist use `request.ip`. Behind a reverse proxy (nginx, ALB), set `server.trustProxy` so Fastify reads the real client IP from forwarded headers:
-
-```yaml
-config:
-  server:
-    trustProxy: true           # or a specific address/range
-```
-
-See [Fastify trust proxy documentation](https://fastify.dev/docs/latest/Reference/Server/#trustproxy) for supported values.
-
-### Security Headers (Helmet)
-
-Set `security.helmet: true` to enable security headers via `@fastify/helmet` (adds `X-Content-Type-Options`, `X-Frame-Options`, etc.). Pass an object for custom options:
-
-```yaml
-config:
-  security:
-    helmet:
-      contentSecurityPolicy: false
-```
-
-### IP Allowlist
-
-Restrict access by client IP. Supports exact match and CIDR notation. IPv4-mapped IPv6 addresses (`::ffff:`) are normalized automatically.
-
-Per-route `allowedIPs` replaces the global list for that route:
+## IP Allowlist
 
 ```yaml
 config:
@@ -411,6 +399,17 @@ config:
       command: aux4 admin
       allowedIPs:
         - 10.0.0.1
+```
+
+Per-route `allowedIPs` replaces the global list. Behind a reverse proxy, set `server.trustProxy: true`.
+
+## HTTPS/TLS
+
+```yaml
+config:
+  tls:
+    key: path/to/key.pem
+    cert: path/to/cert.pem
 ```
 
 ## Environment Variables

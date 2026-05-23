@@ -75,6 +75,10 @@ async function main() {
       }
     }
 
+    if (args[8] === "true") {
+      config.production = true;
+    }
+
     const server = new Server(config);
     await server.start();
 

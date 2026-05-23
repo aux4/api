@@ -22,6 +22,7 @@
   },
   "homepage": "https://aux4.io",
   "dependencies": {
+    "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.1.0",
     "@fastify/helmet": "^13.0.1",
     "@fastify/multipart": "^9.0.3",
