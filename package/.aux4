@@ -127,6 +127,15 @@
           "help": {
             "text": "Manage API components"
           }
+        },
+        {
+          "name": "module",
+          "execute": [
+            "profile:api:module"
+          ],
+          "help": {
+            "text": "API modules"
+          }
         }
       ]
     },
