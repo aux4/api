@@ -96,6 +96,89 @@
           "help": {
             "text": "Stop the aux4 API server"
           }
+        },
+        {
+          "name": "init",
+          "execute": [
+            "[ -f ${configFile} ] || (echo '${configFile} not found' && exit 1)",
+            "node ${packageDir}/lib/server.js init value(configFile)"
+          ],
+          "help": {
+            "text": "Install all components from config.yaml",
+            "variables": [
+              {
+                "name": "configFile",
+                "text": "Path to config file",
+                "default": "config.yaml"
+              }
+            ]
+          }
+        },
+        {
+          "name": "package",
+          "execute": [
+            "profile:api:package"
+          ],
+          "help": {
+            "text": "Manage API components"
+          }
+        }
+      ]
+    },
+    {
+      "name": "api:package",
+      "commands": [
+        {
+          "name": "install",
+          "execute": [
+            "set:pkg=${package}",
+            "set:scope=!echo $pkg | cut -d'/' -f1",
+            "set:name=!echo $pkg | cut -d'/' -f2",
+            "nout:if [ ! -d ~/.aux4.config/packages/$scope/$name ]; then aux4 aux4 pkger install $pkg; fi || true",
+            "mkdir -p components/$scope/$name",
+            "cp -r ~/.aux4.config/packages/$scope/$name/* components/$scope/$name/",
+            "cp ~/.aux4.config/packages/$scope/$name/.aux4 components/$scope/$name/.aux4",
+            "log:Component $pkg installed to components/$scope/$name"
+          ],
+          "help": {
+            "text": "Install an API component",
+            "variables": [
+              {
+                "name": "package",
+                "text": "The package to install (e.g., aux4/contacts)",
+                "arg": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "uninstall",
+          "execute": [
+            "set:pkg=${package}",
+            "set:scope=!echo $pkg | cut -d'/' -f1",
+            "set:name=!echo $pkg | cut -d'/' -f2",
+            "if [ -d components/$scope/$name ]; then rm -rf components/$scope/$name && echo 'Component $pkg uninstalled'; else echo 'Component $pkg not found'; fi",
+            "nout:rmdir components/$scope 2>/dev/null || true"
+          ],
+          "help": {
+            "text": "Uninstall an API component",
+            "variables": [
+              {
+                "name": "package",
+                "text": "The package to uninstall (e.g., aux4/contacts)",
+                "arg": true
+              }
+            ]
+          }
+        },
+        {
+          "name": "list",
+          "execute": [
+            "if [ -d components ] && [ \"$(ls -A components 2>/dev/null)\" ]; then find components -name '.aux4' -mindepth 3 -maxdepth 3 | while read f; do d=$(dirname \"$$f\"); echo \"$$(basename $$(dirname \"$$d\"))/$$(basename \"$$d\")\"; done; else echo 'No components installed'; fi"
+          ],
+          "help": {
+            "text": "List installed API components"
+          }
         }
       ]
     }
