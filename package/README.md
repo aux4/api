@@ -336,6 +336,129 @@ Development mode (default):
 - No `Secure` flag (cookies work on HTTP localhost)
 - Template caching with mtime check (edit templates, see changes immediately)
 
+## Components
+
+Components are reusable, mountable web modules. Each component is a self-contained package with commands, routes, and views that can be plugged into any aux4/api application.
+
+### Component Structure
+
+A component is an aux4 package with views and a config:
+
+```
+components/aux4/contacts/
+  .aux4              # commands
+  config.yaml        # routes (relative paths)
+  views/
+    list.p.hbs       # partials
+    get.p.hbs
+    new.p.hbs
+    edit.p.hbs
+```
+
+### Component Config
+
+The component's `config.yaml` defines routes relative to its root:
+
+```yaml
+api:
+  "GET /":
+    command: aux4 contacts list
+  "GET /{id}":
+    command: aux4 contacts get
+  "POST /":
+    command: aux4 contacts create
+    redirect: /
+```
+
+### Mounting Components
+
+The host app mounts components at a path in its `config.yaml`:
+
+```yaml
+config:
+  components:
+    /contacts:
+      package: aux4/contacts
+    /chat:
+      package: aux4/chat
+      config:
+        maxMessages: 100
+```
+
+Routes are automatically prefixed with the mount path. `GET /` in the contacts component becomes `GET /contacts` in the host app. Redirects are prefixed too.
+
+### Installing Components
+
+Install all components listed in config:
+
+```bash
+aux4 api init
+```
+
+Or install individually:
+
+```bash
+aux4 api package install aux4/contacts
+```
+
+The `init` command:
+1. Downloads packages from hub.aux4.io (if not already installed)
+2. Copies component files to `./components/<scope>/<name>/`
+3. Merges component command profiles into the host `.aux4`
+
+### Managing Components
+
+```bash
+aux4 api package list          # list installed components
+aux4 api package uninstall aux4/contacts  # remove a component
+```
+
+### Template Variables
+
+Component partials receive `{{apiPath}}` and `{{basePath}}` for building links:
+
+- `{{apiPath}}` — the API route prefix (e.g., `/api/contacts`) for `hx-get`, `hx-post`, etc.
+- `{{basePath}}` — the page route prefix (e.g., `/contacts`) for `hx-push-url` and `href`
+
+Inside `{{#each}}` loops, use `{{../apiPath}}` and `{{../basePath}}`.
+
+```handlebars
+<a href="{{../basePath}}/{{id}}" hx-get="{{../apiPath}}/{{id}}" hx-target="#app">
+  {{firstName}} {{lastName}}
+</a>
+```
+
+### Embedding Components
+
+Use `<aux4-component>` to embed components in any page. The custom element is auto-injected when components are configured.
+
+```html
+<!-- Load the full component with URL routing -->
+<aux4-component src="/contacts" route="true"></aux4-component>
+
+<!-- Load a specific view -->
+<aux4-component src="/contacts/card" id="abc123"></aux4-component>
+
+<!-- Multiple components on one page -->
+<aux4-component src="/contacts" route="true"></aux4-component>
+<aux4-component src="/chat/messages" room="general"></aux4-component>
+```
+
+Attributes:
+- `src` — the component path (automatically prefixed with `/api/`)
+- `route="true"` — use the current page URL path instead of the static `src` (for SPA-style routing)
+- Any other attribute — passed as query parameters to the API
+
+The component fetches HTML from the API, renders it, and processes HTMX attributes automatically. No JavaScript needed per component.
+
+### How It Works
+
+1. **On startup**, aux4/api reads `config.components`, loads each component's `config.yaml`, prefixes routes, and merges them into the API
+2. **Component views** are resolved from `components/<scope>/<name>/views/` for partial rendering
+3. **`<aux4-component>`** is auto-injected as a `<script>` tag before `</body>` in all HTML pages
+4. **Authentication** flows through the host app's `security.auth` — components receive `${principal}` automatically
+5. **On page load**, each `<aux4-component>` fetches its content from the API and renders it
+
 ## WebSocket Support
 
 WebSocket routes are defined in `config.ws`. Each path maps lifecycle events and custom actions to commands.

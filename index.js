@@ -17,16 +17,55 @@ async function main() {
     }
 
     if (args[0] === 'init') {
+      const fs = require('fs');
       const { execSync } = require('child_process');
       const configFile = args[1] || 'config.yaml';
       try {
         const output = execSync(`aux4 config get components --configFile ${configFile}`).toString().trim();
         const components = JSON.parse(output || '{}');
+        const profiles = [];
+
         for (const [, value] of Object.entries(components)) {
           if (value.package) {
-            console.log(`Installing ${value.package}...`);
-            execSync(`aux4 api package install ${value.package}`, { stdio: 'inherit' });
+            const scope = value.package.split('/')[0];
+            const name = value.package.split('/')[1];
+            const componentDir = `./components/${scope}/${name}`;
+
+            if (!fs.existsSync(componentDir)) {
+              console.log(`Installing ${value.package}...`);
+              execSync(`aux4 api package install ${value.package}`, { stdio: 'inherit' });
+            } else {
+              console.log(`Component ${value.package} already installed`);
+            }
+
+            // Load component .aux4 profiles
+            const aux4File = `${componentDir}/.aux4`;
+            if (fs.existsSync(aux4File)) {
+              try {
+                const pkg = JSON.parse(fs.readFileSync(aux4File, 'utf-8'));
+                if (pkg.profiles) {
+                  profiles.push(...pkg.profiles);
+                }
+              } catch {}
+            }
           }
+        }
+
+        // Merge component profiles into .aux4
+        if (profiles.length > 0 && fs.existsSync('.aux4')) {
+          const hostAux4 = JSON.parse(fs.readFileSync('.aux4', 'utf-8'));
+
+          // Remove previously merged component profiles (marked with __component)
+          hostAux4.profiles = (hostAux4.profiles || []).filter(p => !p.__component);
+
+          // Add component profiles with marker
+          for (const profile of profiles) {
+            profile.__component = true;
+            hostAux4.profiles.push(profile);
+          }
+
+          fs.writeFileSync('.aux4', JSON.stringify(hostAux4, null, 2));
+          console.log('Merged component profiles into .aux4');
         }
       } catch (error) {
         if (error.message.includes('components')) {
@@ -100,6 +139,14 @@ async function main() {
 
     if (args[8] === "true") {
       config.production = true;
+    }
+
+    if (args[9]) {
+      try {
+        config.components = JSON.parse(args[9]);
+      } catch (error) {
+        config.components = args[9];
+      }
     }
 
     const server = new Server(config);

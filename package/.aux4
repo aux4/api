@@ -39,7 +39,7 @@
         {
           "name": "start",
           "execute": [
-            "node ${packageDir}/lib/server.js start values(port, cors, api, ws, server, tls, security, production)"
+            "node ${packageDir}/lib/server.js start values(port, cors, api, ws, server, tls, security, production, components)"
           ],
           "help": {
             "text": "Start the aux4 API server",
@@ -84,6 +84,11 @@
                 "name": "production",
                 "text": "Enable production mode (secure cookies, template caching)",
                 "default": "false"
+              },
+              {
+                "name": "components",
+                "text": "Component configuration",
+                "default": ""
               }
             ]
           }
