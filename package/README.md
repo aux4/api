@@ -186,6 +186,16 @@ The auth command receives `--cookies` and `--headers` and should return a JSON o
 
 The principal is injected as `--principal` into route commands, accessible via `${principal.email}`.
 
+### Auth Caching
+
+Auth validation results are cached in memory for 1 minute per token, avoiding repeated command execution for the same session. Configure the TTL:
+
+```yaml
+security:
+  auth:
+    cacheTTL: 60000   # milliseconds (default: 60000)
+```
+
 ### Cookie Management
 
 Set cookies from command responses:
@@ -261,6 +271,35 @@ The JSON response is available in the template as `data`:
 ```
 
 Clients requesting `Accept: application/json` receive raw JSON instead.
+
+### Handlebars Helpers
+
+Built-in helpers available in all templates:
+
+| Helper | Usage | Description |
+|--------|-------|-------------|
+| `eq` | `{{#if (eq mode "edit")}}` | Equality comparison |
+| `ne` | `{{#if (ne status "draft")}}` | Not-equal comparison |
+| `fileSize` | `{{fileSize size}}` | Human-readable file size (e.g., `38.8 KB`) |
+
+#### Custom Helpers
+
+Add custom helpers by creating a `helpers/` directory. Each `.js` file becomes a helper named after the filename:
+
+```
+helpers/
+  uppercase.js   → {{uppercase name}}
+  formatDate.js  → {{formatDate createdAt}}
+```
+
+Each file exports a single function:
+
+```js
+// helpers/uppercase.js
+module.exports = function(str) {
+  return (str || "").toUpperCase();
+};
+```
 
 ### SPA Catch-All
 
@@ -458,6 +497,47 @@ The component fetches HTML from the API, renders it, and processes HTMX attribut
 3. **`<aux4-component>`** is auto-injected as a `<script>` tag before `</body>` in all HTML pages
 4. **Authentication** flows through the host app's `security.auth` — components receive `${principal}` automatically
 5. **On page load**, each `<aux4-component>` fetches its content from the API and renders it
+6. **Batch loading** — multiple components on a page are batched into a single `/aux4/batch` request
+7. **Placeholders** — empty components show a Bootstrap placeholder skeleton while loading
+
+### Batch Loading
+
+When multiple `<aux4-component>` elements exist on a page, their requests are batched into a single POST to `/aux4/batch` (10ms debounce). This reduces the number of HTTP requests from N to 1.
+
+The batch endpoint:
+- Max 20 URLs per request
+- Only `/api/` paths allowed
+- Auth flows through from the original request
+
+### Command Namespacing
+
+Components should use the `api:module` profile to avoid command name collisions:
+
+```json
+{
+  "name": "api:module",
+  "commands": [{
+    "name": "files",
+    "execute": ["profile:api:module:files"]
+  }]
+}
+```
+
+Commands are accessed via `aux4 api module files list`. The `api:module` profile is provided by aux4/api.
+
+### Binary Downloads
+
+Commands can return binary data via data URIs. By default, files are downloaded (not opened in browser):
+
+```
+data:application/pdf;filename=report.pdf;base64,JVBERi0xLjQ...
+```
+
+To open in browser instead of downloading, add `inline`:
+
+```
+data:image/png;inline;filename=photo.png;base64,iVBORw0KGgo...
+```
 
 ## WebSocket Support
 
