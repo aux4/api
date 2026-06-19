@@ -103,7 +103,7 @@ config:
 
 #### Security
 
-API key authentication, rate limiting, security headers, and IP allowlist. All features are optional.
+Authentication (API key, cookie, bearer, or full OAuth2/OIDC web login), rate limiting, security headers, and IP allowlist. All features are optional.
 
 ```yaml
 config:
@@ -120,3 +120,5 @@ config:
 ```
 
 Routes can be marked `public: true` to skip API key checks. Per-route `allowedIPs` replaces the global list. Per-route `rateLimit` is additive to global. Behind a reverse proxy, set `server.trustProxy: true` so `request.ip` reflects the real client IP.
+
+Set `security.auth.type: oauth` to enable OAuth2/OIDC web login. The server auto-wires `GET /auth/signin`, `GET /auth/callback`, and `GET /auth/logout`, shells to the `aux4/oauth` package for the authorization-code + PKCE exchange, and issues an HS256 session cookie that it verifies in-process on each request (injecting `${principal.*}` into route commands). See the README for the full `security.auth.type: oauth` configuration and flow.

@@ -166,6 +166,7 @@ config:
 | `bearer` | Reads token from `Authorization: Bearer <token>` header |
 | `apiKey` | Static API key comparison (no command needed) |
 | `both` | Cookie first, bearer fallback (default) |
+| `oauth` | Full OAuth2/OIDC web-login flow with a signed session cookie |
 
 ### Cookie Auth
 
@@ -234,6 +235,47 @@ security:
 ```
 
 Reads from `Authorization: Bearer <token>` header.
+
+### OAuth Web Login
+
+`type: oauth` enables a full server-side OAuth2/OIDC login flow. The API handles the browser redirect dance, exchanges the authorization code through the `aux4 oauth` commands, and issues its own signed session cookie. Per-request authentication then verifies that session cookie in-process (no subprocess) and injects the principal into route commands. Works with any OAuth2/OIDC provider.
+
+```yaml
+security:
+  auth:
+    type: oauth
+    session:
+      secret: "secret://session-secret"   # HMAC secret for the session JWT
+      cookie: auth_token                   # session cookie name (default: auth_token)
+      ttl: 86400                           # session lifetime in seconds (default: 86400)
+    redirectAfterLogin: /                  # where to send the user after a successful login
+    redirectOnError: /login                # where to send the user on login failure / 401 (optional)
+    providers:
+      google:
+        clientId: "..."
+        clientSecret: "secret://google-client-secret"
+        redirectUri: https://app.example.com/auth/callback
+        # optional, for non-bundled providers:
+        authUrl: https://accounts.google.com/o/oauth2/v2/auth
+        tokenUrl: https://oauth2.googleapis.com/token
+        userinfoUrl: https://openidconnect.googleapis.com/v1/userinfo
+        scopes: openid,email,profile
+        map: { "id": "sub" }               # optional userinfo->principal field map
+```
+
+When `type: oauth` is set, the API auto-wires three routes:
+
+| Route | Behavior |
+|-------|----------|
+| `GET /auth/signin?provider=<name>` | Builds the provider authorize URL (PKCE S256), stashes `{codeVerifier, state, provider}` in a short-lived signed httpOnly cookie, and `302`s to the provider. `provider` defaults to the sole configured provider when omitted. |
+| `GET /auth/callback?code&state` | Reads and clears the temp cookie, verifies `state`, exchanges the code for a principal, mints an HS256 session JWT (claims = principal + `exp`), sets it as the session cookie, and redirects to `redirectAfterLogin`. On any failure it redirects to `redirectOnError`. |
+| `GET /auth/logout` | Clears the session cookie and redirects (defaults to `redirectOnError`; override with `?redirect=/path`). |
+
+The PKCE state lives entirely in a signed, short-lived cookie — there is no server-side session store. The session cookie is an HS256 JWT signed and verified with `session.secret` using node's built-in crypto (no JWT library dependency). On every protected request the JWT signature and expiry are checked in-process, and the decoded claims are injected as `--principal` (accessible via `${principal.email}`, `${principal.sub}`, etc.). Missing, invalid, or expired session cookies return `401` (browsers are redirected to `redirectOnError`).
+
+Cookies are `httpOnly` with `SameSite=Lax`, and gain the `Secure` flag in production mode. The provider's `clientSecret` and access tokens are never logged or stored in the session.
+
+**Requires** the `aux4/oauth` package to be installed (it provides `aux4 oauth authorize-url` and `aux4 oauth exchange`).
 
 ## Convention-Based Views
 

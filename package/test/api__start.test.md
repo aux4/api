@@ -7,20 +7,20 @@ config:
     timeout: 2000
   api:
     "GET /say":
-      command: aux4 say
+      command: aux4 apitest say
     "POST /users/{id}":
-      command: aux4 update-user
+      command: aux4 apitest update-user
     "POST /upload":
-      command: aux4 upload
+      command: aux4 apitest upload
     "GET /image":
-      command: aux4 test-image
+      command: aux4 apitest test-image
     "GET /slow":
-      command: aux4 slow
+      command: aux4 apitest slow
     "GET /stream":
-      command: aux4 stream-test
+      command: aux4 apitest stream-test
       stream: true
     "POST /form":
-      command: aux4 form-handler
+      command: aux4 apitest form-handler
 ```
 
 ```file:.aux4
@@ -28,6 +28,20 @@ config:
   "profiles": [
     {
       "name": "main",
+      "commands": [
+        {
+          "name": "apitest",
+          "execute": [
+            "profile:apitest"
+          ],
+          "help": {
+            "text": "API test fixture commands"
+          }
+        }
+      ]
+    },
+    {
+      "name": "apitest",
       "commands": [
         {
           "name": "say",
