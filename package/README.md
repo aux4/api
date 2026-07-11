@@ -205,6 +205,34 @@ Overlay rules:
 - `requestBody` — **replaces** the generated request body.
 - `responses` — **shallow-merged** onto the generated `200`.
 
+## Single-Event Handling (Lambda)
+
+`aux4 api handle` runs one **API Gateway REST v1 proxy event** through the same routing engine as `api start`, but **in-process** — no HTTP server, no socket. It reads the event as JSON on stdin and writes an API Gateway proxy response as JSON to stdout:
+
+```bash
+echo '{ "httpMethod": "GET", "path": "/contacts", "headers": {}, "body": null, "isBase64Encoded": false, "requestContext": { "identity": { "sourceIp": "1.2.3.4" } } }' \
+  | aux4 api handle --configFile config.yaml
+```
+
+```json
+{
+  "statusCode": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "[{\"id\":\"1\",\"name\":\"Alice\"}]",
+  "isBase64Encoded": false
+}
+```
+
+This is the one-event-per-invocation entrypoint the AWS Lambda runtime calls when running a multi-route aux4/api app as a container image behind API Gateway. It reuses the same routing, authentication, rate-limiting, cookie, redirect, and response-shaping logic as the running server, so a single deployed function can serve every route in `config.api`.
+
+- **Event shape** — API Gateway **REST API (v1) / payload format 1.0**: `httpMethod`, `path`, flat `headers`, `queryStringParameters` / `multiValueQueryStringParameters`, `body`, `isBase64Encoded`, `requestContext.identity.sourceIp`. `pathParameters` are recomputed by matching `path` against the route patterns.
+- **Response contract** — identical to the server: a command that emits JSON with a `statusCode` produces that gateway response; plain JSON is wrapped as `200 application/json`; `data:`/binary output is base64-encoded with `isBase64Encoded: true`; `Set-Cookie` is emitted (multiple cookies via `multiValueHeaders`).
+- **Base64 bodies** — an `isBase64Encoded: true` request body is decoded before routing.
+
+**Note:** streaming (`stream: true`, SSE), multipart uploads (`multipart/form-data`), and WebSocket routes require a live socket and are **not supported** through `api handle` — they are rejected with `501` / `415`. Use `aux4 api start` for those transports.
+
 ## Authentication
 
 Configure authentication in `security.auth`:
