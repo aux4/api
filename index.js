@@ -6,13 +6,27 @@ async function main() {
   try {
     const args = process.argv.slice(2);
 
-    if (args.length === 0 || !['start', 'stop', 'init'].includes(args[0])) {
-      console.error('Usage: node index.js start|stop|init');
+    if (args.length === 0 || !['start', 'stop', 'init', 'openapi'].includes(args[0])) {
+      console.error('Usage: node index.js start|stop|init|openapi');
       process.exit(1);
     }
 
     if (args[0] === 'stop') {
       Server.stopByPid();
+      return;
+    }
+
+    if (args[0] === 'openapi') {
+      const { generate } = require('./lib/openapi');
+      const configFile = args[1] || 'config.yaml';
+      const format = args[2] || 'json';
+      try {
+        process.stdout.write(generate(configFile, format));
+        process.stdout.write('\n');
+      } catch (error) {
+        console.error(error.message);
+        process.exit(1);
+      }
       return;
     }
 

@@ -120,6 +120,31 @@
           }
         },
         {
+          "name": "openapi",
+          "execute": [
+            "node ${packageDir}/lib/server.js openapi values(configFile, format)"
+          ],
+          "help": {
+            "text": "Generate an OpenAPI 3.x document from config.api",
+            "variables": [
+              {
+                "name": "configFile",
+                "text": "Path to config file",
+                "default": "config.yaml"
+              },
+              {
+                "name": "format",
+                "text": "Output format (json or yaml)",
+                "default": "json",
+                "options": [
+                  "json",
+                  "yaml"
+                ]
+              }
+            ]
+          }
+        },
+        {
           "name": "package",
           "execute": [
             "profile:api:package"

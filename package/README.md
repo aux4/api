@@ -129,6 +129,8 @@ The full AWS API Gateway-style event is also piped to the command via stdin for 
     timeWindow: 60000
   allowedIPs:               # per-route IP allowlist
     - 10.0.0.1
+  openapi:                  # OpenAPI operation overrides (see OpenAPI section)
+    summary: My endpoint
 ```
 
 Routes without a `command` field can still use `clearCookie` and `redirect` (useful for logout):
@@ -143,6 +145,65 @@ Routes without a `command` field can still use `clearCookie` and `redirect` (use
 ### Redirect
 
 After a successful command, `redirect` executes the target route's command and returns its response. If the target has a matching partial template, it renders HTML.
+
+## OpenAPI
+
+Generate an [OpenAPI 3.0.3](https://spec.openapis.org/oas/v3.0.3) document from your `config.api` (plus any mounted components) with:
+
+```bash
+aux4 api openapi --configFile config.yaml            # JSON to stdout
+aux4 api openapi --configFile config.yaml --format yaml
+```
+
+Every `"METHOD /path"` route key becomes an OpenAPI path item and operation:
+
+- `{name}` path segments become required `string` path parameters.
+- `operationId` and `summary` are derived from the route's `command` (e.g. `aux4 auth signin` → `aux4_auth_signin`).
+- Operations are tagged by the first path segment (`/contacts/{id}` → `contacts`).
+- Component routes from `config.components` are merged under their mount paths, exactly as the running server resolves them.
+- `config.info` (`title`, `version`, `description`) populates the OpenAPI `info` block. Defaults: `aux4 API` / `1.0.0`.
+
+### Parameter inference
+
+As a best effort, the command's `execute[]` (looked up in the app `.aux4` beside the config file) is statically scanned:
+
+- `${query.X}` references → `string` query parameters (on `GET`/`DELETE`).
+- Body-field references → `requestBody` properties (on `POST`/`PUT`/`PATCH`). Fields are found via `${body.X}` and via aliases created with `set:alias=json:${body}`, e.g. `object(data.firstName:firstName, ...)`.
+
+Inference is a heuristic and only sees fields the static scan can reach; everything else should be declared with the `openapi:` annotation below.
+
+### The `openapi:` annotation
+
+Any route entry may carry an `openapi:` block that is overlaid onto the generated operation — the reliable escape hatch for anything inference cannot derive:
+
+```yaml
+config:
+  api:
+    "GET /search":
+      command: aux4 search run
+      openapi:
+        summary: Search records
+        tags:
+          - search
+        parameters:
+          - name: q
+            in: query
+            required: true
+            schema:
+              type: string
+        responses:
+          "200":
+            description: Matching records
+          "400":
+            description: Bad query
+```
+
+Overlay rules:
+
+- `summary`, `description`, `operationId`, `deprecated`, `tags` — **replace** the generated value.
+- `parameters` — **merged** by `in`+`name` (annotation wins, new params appended).
+- `requestBody` — **replaces** the generated request body.
+- `responses` — **shallow-merged** onto the generated `200`.
 
 ## Authentication
 
