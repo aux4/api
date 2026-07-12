@@ -6,13 +6,51 @@ async function main() {
   try {
     const args = process.argv.slice(2);
 
-    if (args.length === 0 || !['start', 'stop', 'init'].includes(args[0])) {
-      console.error('Usage: node index.js start|stop|init');
+    if (args.length === 0 || !['start', 'stop', 'init', 'openapi', 'handle'].includes(args[0])) {
+      console.error('Usage: node index.js start|stop|init|openapi|handle');
       process.exit(1);
     }
 
     if (args[0] === 'stop') {
       Server.stopByPid();
+      return;
+    }
+
+    if (args[0] === 'handle') {
+      const { handleCommand } = require('./lib/handleCommand');
+      const parse = value => {
+        try {
+          return JSON.parse(value);
+        } catch {
+          return value;
+        }
+      };
+
+      const config = {};
+      if (args[1]) config.cors = parse(args[1]);
+      if (args[2]) config.api = parse(args[2]);
+      if (args[3]) config.ws = parse(args[3]);
+      if (args[4]) config.server = parse(args[4]);
+      if (args[5]) config.tls = parse(args[5]);
+      if (args[6]) config.security = parse(args[6]);
+      if (args[7] === 'true') config.production = true;
+      if (args[8]) config.components = parse(args[8]);
+
+      await handleCommand(config);
+      return;
+    }
+
+    if (args[0] === 'openapi') {
+      const { generate } = require('./lib/openapi');
+      const configFile = args[1] || 'config.yaml';
+      const format = args[2] || 'json';
+      try {
+        process.stdout.write(generate(configFile, format));
+        process.stdout.write('\n');
+      } catch (error) {
+        console.error(error.message);
+        process.exit(1);
+      }
       return;
     }
 

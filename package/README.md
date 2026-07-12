@@ -129,6 +129,8 @@ The full AWS API Gateway-style event is also piped to the command via stdin for 
     timeWindow: 60000
   allowedIPs:               # per-route IP allowlist
     - 10.0.0.1
+  openapi:                  # OpenAPI operation overrides (see OpenAPI section)
+    summary: My endpoint
 ```
 
 Routes without a `command` field can still use `clearCookie` and `redirect` (useful for logout):
@@ -143,6 +145,93 @@ Routes without a `command` field can still use `clearCookie` and `redirect` (use
 ### Redirect
 
 After a successful command, `redirect` executes the target route's command and returns its response. If the target has a matching partial template, it renders HTML.
+
+## OpenAPI
+
+Generate an [OpenAPI 3.0.3](https://spec.openapis.org/oas/v3.0.3) document from your `config.api` (plus any mounted components) with:
+
+```bash
+aux4 api openapi --configFile config.yaml            # JSON to stdout
+aux4 api openapi --configFile config.yaml --format yaml
+```
+
+Every `"METHOD /path"` route key becomes an OpenAPI path item and operation:
+
+- `{name}` path segments become required `string` path parameters.
+- `operationId` and `summary` are derived from the route's `command` (e.g. `aux4 auth signin` → `aux4_auth_signin`).
+- Operations are tagged by the first path segment (`/contacts/{id}` → `contacts`).
+- Component routes from `config.components` are merged under their mount paths, exactly as the running server resolves them.
+- `config.info` (`title`, `version`, `description`) populates the OpenAPI `info` block. Defaults: `aux4 API` / `1.0.0`.
+
+### Parameter inference
+
+As a best effort, the command's `execute[]` (looked up in the app `.aux4` beside the config file) is statically scanned:
+
+- `${query.X}` references → `string` query parameters (on `GET`/`DELETE`).
+- Body-field references → `requestBody` properties (on `POST`/`PUT`/`PATCH`). Fields are found via `${body.X}` and via aliases created with `set:alias=json:${body}`, e.g. `object(data.firstName:firstName, ...)`.
+
+Inference is a heuristic and only sees fields the static scan can reach; everything else should be declared with the `openapi:` annotation below.
+
+### The `openapi:` annotation
+
+Any route entry may carry an `openapi:` block that is overlaid onto the generated operation — the reliable escape hatch for anything inference cannot derive:
+
+```yaml
+config:
+  api:
+    "GET /search":
+      command: aux4 search run
+      openapi:
+        summary: Search records
+        tags:
+          - search
+        parameters:
+          - name: q
+            in: query
+            required: true
+            schema:
+              type: string
+        responses:
+          "200":
+            description: Matching records
+          "400":
+            description: Bad query
+```
+
+Overlay rules:
+
+- `summary`, `description`, `operationId`, `deprecated`, `tags` — **replace** the generated value.
+- `parameters` — **merged** by `in`+`name` (annotation wins, new params appended).
+- `requestBody` — **replaces** the generated request body.
+- `responses` — **shallow-merged** onto the generated `200`.
+
+## Single-Event Handling (Lambda)
+
+`aux4 api handle` runs one **API Gateway REST v1 proxy event** through the same routing engine as `api start`, but **in-process** — no HTTP server, no socket. It reads the event as JSON on stdin and writes an API Gateway proxy response as JSON to stdout:
+
+```bash
+echo '{ "httpMethod": "GET", "path": "/contacts", "headers": {}, "body": null, "isBase64Encoded": false, "requestContext": { "identity": { "sourceIp": "1.2.3.4" } } }' \
+  | aux4 api handle --configFile config.yaml
+```
+
+```json
+{
+  "statusCode": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "[{\"id\":\"1\",\"name\":\"Alice\"}]",
+  "isBase64Encoded": false
+}
+```
+
+This is the one-event-per-invocation entrypoint the AWS Lambda runtime calls when running a multi-route aux4/api app as a container image behind API Gateway. It reuses the same routing, authentication, rate-limiting, cookie, redirect, and response-shaping logic as the running server, so a single deployed function can serve every route in `config.api`.
+
+- **Event shape** — API Gateway **REST API (v1) / payload format 1.0**: `httpMethod`, `path`, flat `headers`, `queryStringParameters` / `multiValueQueryStringParameters`, `body`, `isBase64Encoded`, `requestContext.identity.sourceIp`. `pathParameters` are recomputed by matching `path` against the route patterns.
+- **Response contract** — identical to the server: a command that emits JSON with a `statusCode` produces that gateway response; plain JSON is wrapped as `200 application/json`; `data:`/binary output is base64-encoded with `isBase64Encoded: true`; `Set-Cookie` is emitted (multiple cookies via `multiValueHeaders`).
+- **Base64 bodies** — an `isBase64Encoded: true` request body is decoded before routing.
+
+**Note:** streaming (`stream: true`, SSE), multipart uploads (`multipart/form-data`), and WebSocket routes require a live socket and are **not supported** through `api handle` — they are rejected with `501` / `415`. Use `aux4 api start` for those transports.
 
 ## Authentication
 
