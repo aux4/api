@@ -82,6 +82,32 @@ config:
 
 Routes are defined in `config.api` with the format `"METHOD /path"`. Path parameters use `{name}` syntax.
 
+### Route Matching
+
+| Syntax | Matches | Captured as |
+|--------|---------|-------------|
+| `GET /users` | Exact method + path | — |
+| `GET /users/{id}` | A single path segment (no `/`) | `${params.id}` |
+| `ANY /users/{id}` | Any HTTP method for that path | `${params.id}` |
+| `GET /files/{path...}` | The rest of the path, **including** slashes (greedy) | `${params.path}` |
+| `ANY /{path...}` | **Every** method and **every** path (full catch-all) | `${params.path}` |
+
+- **Wildcard method** — use `ANY` (or `*`) as the method to match every HTTP method (`GET`, `POST`, `PUT`, `DELETE`, `PATCH`, `OPTIONS`, and auto-`HEAD`) for the given path.
+- **Greedy catch-all path** — append `...` inside a path parameter (`{path...}`) to capture the remaining path segments, slashes and all. A plain `{name}` still matches exactly one segment. The captured value is available to the command as a normal path parameter (e.g. `${params.path}` / `.pathParameters.path` in the stdin event).
+- **Matching priority** — specific routes always win over catch-alls regardless of the order they are declared. An exact method beats `ANY`, and a single-segment `{name}` route beats a greedy `{path...}` route. Among equally-specific routes, declaration order is preserved. This lets you declare `GET /health` alongside `ANY /{path...}` and have `/health` still reach its own command while everything else falls through to the catch-all.
+
+To mount a single command that serves **every method on every path** (e.g. a programmable mock), use:
+
+```yaml
+config:
+  api:
+    "ANY /{path...}":
+      command: aux4 my-handler respond
+      public: true
+```
+
+The command receives the method via the stdin event's `httpMethod` (also `requestContext.httpMethod`) and the full request path via `--params` as `{"path":"the/rest/of/the/path"}` (i.e. `${params.path}`, or `.pathParameters.path` in the event). The original path is also on the event as `path` and `requestContext.path`.
+
 ### Command Variables
 
 Request data is automatically injected as command variables:

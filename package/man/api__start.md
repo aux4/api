@@ -5,6 +5,7 @@ Launches a Fastify-based HTTP server that bridges web requests to CLI commands u
 The server supports:
 
 - **REST API** endpoints that map HTTP routes to commands (event piped via stdin, response via stdout)
+- **Wildcard methods and catch-all paths** — `ANY` (or `*`) matches every HTTP method; `{path...}` greedily captures the rest of the path
 - **WebSocket** connections following AWS API Gateway WebSocket patterns
 - **Convention-based views** using Handlebars templates from the `views/` directory
 - **Static file serving** from the `static/` directory
@@ -73,6 +74,28 @@ The `command` field specifies the full shell command to execute. The API Gateway
 - **Command fails** — 500 with stdout/stderr as body
 
 REST API routes are served at `/api/*`. Views from `views/` are served as GET routes. Static files from `static/` are served at `/static/*`. WebSocket management API is available at `POST /@connections/:connectionId` and `DELETE /@connections/:connectionId`.
+
+#### Route Matching
+
+Route keys use the format `"METHOD /path"`:
+
+- **Exact** — `GET /users` matches only that method and path.
+- **Single-segment param** — `GET /users/{id}` captures one path segment (no `/`) as `${params.id}`.
+- **Wildcard method** — `ANY /users/{id}` (or `* /users/{id}`) matches every HTTP method for that path.
+- **Greedy catch-all path** — `GET /files/{path...}` captures the remaining path *including* slashes as `${params.path}`.
+- **Full catch-all** — `ANY /{path...}` matches every method on every path; the command reads the method from the event's `httpMethod` and the path from `${params.path}` (`.pathParameters.path`).
+
+Specific routes always win over catch-alls regardless of declaration order: an exact method beats `ANY`, and a single-segment `{name}` beats a greedy `{path...}`. Equally-specific routes keep their declaration order. So `GET /health` declared next to `ANY /{path...}` still reaches its own command, while all other requests fall through to the catch-all.
+
+```yaml
+config:
+  api:
+    "GET /health":
+      command: aux4 health-check
+    "ANY /{path...}":
+      command: aux4 my-handler respond
+      public: true
+```
 
 #### Command Concurrency
 
