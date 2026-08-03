@@ -217,6 +217,20 @@ curl -s -o /dev/null -w "%{http_code}" -X POST "http://localhost:18731/api/json"
 400
 ```
 
+### should strip __proto__ from a JSON body (no prototype pollution)
+
+```execute
+curl -s -X POST "http://localhost:18731/api/json" -H "Content-Type: application/json" -d '{"__proto__":{"polluted":true},"name":"Alice"}'
+```
+
+```expect:json
+{
+  "method": "POST",
+  "body": "{\"name\":\"Alice\"}",
+  "text": null
+}
+```
+
 ## regression: form-urlencoded still parses
 
 ### should parse a form-urlencoded body into fields
