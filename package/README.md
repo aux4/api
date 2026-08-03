@@ -127,6 +127,20 @@ Use `value()` for safe shell quoting: `value(params.id)`, `value(body)`.
 
 The full AWS API Gateway-style event is also piped to the command via stdin for backward compatibility.
 
+### Request Body & Content-Types
+
+The server accepts a request body for **any** content-type and delivers it to the command — it never rejects a request at the content-type layer. This makes it a faithful HTTP -> CLI bridge, so a mounted command sees every request regardless of how the client framed it.
+
+| Content-Type | Handling |
+|--------------|----------|
+| `application/json` | Parsed to an object; injected as `${body.field}`. An **empty body** is accepted (no `400`) and delivered as no body — real APIs accept this shape (e.g. an endpoint whose data rides in the query string). A non-empty body that is not valid JSON still returns `400`. |
+| `application/x-www-form-urlencoded` | Parsed into fields; injected as `${body.field}`. |
+| `multipart/form-data` | Files streamed to a temp dir; fields and file metadata injected as `${body.field}`. |
+| `text/plain` | Delivered verbatim as the raw body. |
+| Any other type (e.g. `multipart/related`, `application/octet-stream`) **or no `Content-Type` header** | The raw body is captured as a UTF-8 string and delivered verbatim on the event as `body` (`isBase64Encoded` stays `false`). |
+
+**Note:** the raw catch-all path captures the body as a UTF-8 string, so a truly binary payload sent under an unregistered content-type may be lossy. Text bodies (including `multipart/related` with JSON + text parts, as produced by `aux4 curl --upload`) are preserved exactly.
+
 ### Response Format (stdout)
 
 | Output | Behavior |
