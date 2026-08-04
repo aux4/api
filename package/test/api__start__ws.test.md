@@ -32,7 +32,7 @@ config:
 ```
 
 ```file:ws-client.js
-const W = require("../../node_modules/ws");
+const W = require("ws");
 const action = process.argv[2];
 const t = setTimeout(() => { process.exit(1); }, 3000);
 const w = new W("ws://localhost:18711/ws");
@@ -60,6 +60,7 @@ rm -rf .tmp
 ```
 
 ```execute
+npm install ws --no-save --no-audit --no-fund >/dev/null 2>&1
 nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
 for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
 curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/

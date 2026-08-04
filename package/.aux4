@@ -9,7 +9,8 @@
     "aux4"
   ],
   "dependencies": [
-    "aux4/config"
+    "aux4/config",
+    "aux4/oauth"
   ],
   "system": [
     [
