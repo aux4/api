@@ -128,10 +128,15 @@ true
 
 ### should start the mock provider and the oauth-enabled server
 
+```timeout
+20000
+```
+
 ```execute
 nohup node mock-oidc.js >/dev/null 2>&1 &
 nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
-sleep 2
+for i in $(seq 1 60); do curl -s -o /dev/null "http://localhost:19911/authorize" && break; sleep 0.25; done
+for i in $(seq 1 60); do curl -s -o /dev/null "http://localhost:18999/api/open" && break; sleep 0.25; done
 curl -s -o /dev/null -w "%{http_code}" "http://localhost:18999/api/open"
 ```
 

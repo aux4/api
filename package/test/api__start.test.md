@@ -292,6 +292,10 @@ Error 404
 
 ### should return 500 when command times out
 
+```timeout
+15000
+```
+
 ```execute
 curl -s -o /dev/null -w "%{http_code}" http://localhost:18710/api/slow
 ```
