@@ -17,6 +17,10 @@ config:
       command: aux4 apitest search
     "POST /contacts":
       command: aux4 apitest create
+    "GET /flaky-ok":
+      command: aux4 apitest flakyok
+    "GET /flaky-fail":
+      command: aux4 apitest flakyfail
 ```
 
 ```file:.aux4
@@ -73,6 +77,24 @@ config:
           ],
           "help": {
             "text": "Create a contact"
+          }
+        },
+        {
+          "name": "flakyok",
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, headers: {\"Content-Type\": \"application/json\"}, body: ({status: \"OK\"} | tostring)}'; exit 3"
+          ],
+          "help": {
+            "text": "Emits a valid proxy response on stdout, then exits non-zero"
+          }
+        },
+        {
+          "name": "flakyfail",
+          "execute": [
+            "printf boom 1>&2; exit 4"
+          ],
+          "help": {
+            "text": "Exits non-zero with no usable stdout"
           }
         }
       ]
@@ -193,6 +215,48 @@ echo '{"httpMethod":"GET","path":"/nope","headers":{},"body":null,"isBase64Encod
     "content-type": "application/json; charset=utf-8"
   },
   "body": "{\"message\":\"Route GET /nope not found\",\"error\":\"Not Found\",\"statusCode\":404}",
+  "isBase64Encoded": false
+}
+```
+
+## non-zero exit with a valid response body
+
+### should deliver the command's response when it exits non-zero but emitted well-formed JSON
+
+A route command can print a complete, valid response on stdout and still exit non-zero
+(shell / exit-code aggregation quirks, or a trailing non-fatal error in a downstream tool).
+The proxy handler must deliver that response rather than swallow it as an opaque 500.
+
+```execute
+echo '{"httpMethod":"GET","path":"/flaky-ok","headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"requestId":"r7","identity":{"sourceIp":"1.2.3.4"}}}' | aux4 api handle --configFile config.yaml
+```
+
+```expect:json
+{
+  "statusCode": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "{\"status\":\"OK\"}",
+  "isBase64Encoded": false
+}
+```
+
+## non-zero exit with no usable response
+
+### should return 500 when a non-zero exit produced no valid response body
+
+```execute
+echo '{"httpMethod":"GET","path":"/flaky-fail","headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"requestId":"r8","identity":{"sourceIp":"1.2.3.4"}}}' | aux4 api handle --configFile config.yaml
+```
+
+```expect:json
+{
+  "statusCode": 500,
+  "headers": {
+    "content-type": "application/json; charset=utf-8"
+  },
+  "body": "{\"message\":\"Internal Server Error\",\"error\":\"Command failed\",\"statusCode\":500}",
   "isBase64Encoded": false
 }
 ```

@@ -273,6 +273,51 @@ This is the one-event-per-invocation entrypoint the AWS Lambda runtime calls whe
 
 **Note:** streaming (`stream: true`, SSE), multipart uploads (`multipart/form-data`), and WebSocket routes require a live socket and are **not supported** through `api handle` — they are rejected with `501` / `415`. Use `aux4 api start` for those transports.
 
+CORS is honored on this path too — see [CORS](#cors) below.
+
+## CORS
+
+`config.cors` configures Cross-Origin Resource Sharing and applies to **both** `api start` and `api handle`. On `api start` the headers are applied by `@fastify/cors`; on `api handle` (which never runs Fastify) the same headers are computed in-process. When `config.cors` is absent or empty, no `Access-Control-*` headers are emitted.
+
+```yaml
+config:
+  cors:
+    origin:
+      - https://aux4.io
+      - http://localhost:5173
+    methods:
+      - GET
+      - POST
+      - PUT
+      - DELETE
+      - PATCH
+      - OPTIONS
+    allowedHeaders:
+      - Content-Type
+      - Authorization
+    exposedHeaders:
+      - X-Total-Count
+    credentials: true
+    maxAge: 600
+```
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `origin` | `"*"` | Allow any origin — emits `Access-Control-Allow-Origin: *` with no `Vary`. |
+| `origin` | string | A single allowed origin — the request `Origin` is echoed (with `Vary: Origin`) only when it matches. |
+| `origin` | array | Allowlist — the request `Origin` is echoed (with `Vary: Origin`) only when it is a member. Each entry is matched independently, so multiple URLs (e.g. a production domain plus local dev servers) are all allowed. |
+| `origin` | `true` | Reflect the request `Origin` back (with `Vary: Origin`). |
+| `origin` | `false` | CORS disabled. |
+| `methods` | string/array | `Access-Control-Allow-Methods` on the preflight (default `GET,POST,PUT,DELETE,PATCH,OPTIONS`). |
+| `allowedHeaders` | string/array | `Access-Control-Allow-Headers` on the preflight. When unset, the browser's `access-control-request-headers` is reflected. |
+| `exposedHeaders` | string/array | `Access-Control-Expose-Headers` on the actual response. |
+| `credentials` | boolean | When `true`, adds `Access-Control-Allow-Credentials: true`. |
+| `maxAge` | number | `Access-Control-Max-Age` (seconds) on the preflight only. |
+
+An `OPTIONS` preflight from an allowed origin is answered with `204 No Content` and the preflight header set; the mapped command does not run. Actual responses carry `Access-Control-Allow-Origin` (plus `Access-Control-Allow-Credentials` / `Access-Control-Expose-Headers` when configured) but never the preflight-only `Allow-Methods` / `Allow-Headers` / `Max-Age`.
+
+**Credentials + wildcard:** the Fetch spec forbids `Access-Control-Allow-Credentials: true` alongside `Access-Control-Allow-Origin: *`. When `credentials: true` and `origin` resolves to `*`, the request `Origin` is reflected (with `Vary: Origin`) instead of `*`, so credentialed cross-origin requests succeed.
+
 ## Authentication
 
 Configure authentication in `security.auth`:

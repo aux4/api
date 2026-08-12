@@ -22,6 +22,46 @@ This is the one-event-per-invocation entrypoint the AWS Lambda runtime calls whe
 - **Base64 request bodies** — if the event has `isBase64Encoded: true`, the body is decoded before routing.
 - **Components** — if `config.components` is present, component routes are merged under their mount paths exactly as the running server does.
 
+##### CORS
+
+`api handle` honors `config.cors` with the same semantics as `api start`, computed in-process without Fastify (`api start` uses `@fastify/cors`; this path never runs Fastify, so it computes the equivalent headers itself). When `config.cors` is absent or empty, no `Access-Control-*` headers are emitted and behavior is unchanged.
+
+- **OPTIONS preflight** — an `OPTIONS` request is answered directly with `204 No Content` and the preflight header set (`Access-Control-Allow-Origin`, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Max-Age` when configured); the mapped command never runs. If the origin is not allowed (or `config.cors` is absent), the `OPTIONS` request falls through to normal routing instead.
+- **Actual responses** — every non-preflight response (command success, `404`, `415`, `501`, and the non-zero-exit `500`) gets `Access-Control-Allow-Origin` (plus `Access-Control-Allow-Credentials` and `Access-Control-Expose-Headers` when configured) merged in. The preflight-only headers (`Allow-Methods`, `Allow-Headers`, `Max-Age`) are never added to actual responses.
+
+`config.cors` reference:
+
+| Field | Type | Behavior |
+|-------|------|----------|
+| `origin` | string | `"*"` allows any origin and emits `Access-Control-Allow-Origin: *` with no `Vary`. Any other string is a single allowed origin — the request `Origin` is echoed (with `Vary: Origin`) only when it matches. |
+| `origin` | array | Allowlist — the request `Origin` is echoed (with `Vary: Origin`) only when it is a member. Every member is matched independently, so multiple URLs (e.g. a production domain plus local dev servers) are all allowed. |
+| `origin` | `true` | Reflect — echoes the request `Origin` back with `Vary: Origin`. |
+| `origin` | `false` | CORS disabled — no headers emitted. |
+| `methods` | string/array | `Access-Control-Allow-Methods` on the preflight (default `GET,POST,PUT,DELETE,PATCH,OPTIONS`). |
+| `allowedHeaders` | string/array | `Access-Control-Allow-Headers` on the preflight. When unset, the browser's `access-control-request-headers` is reflected (falling back to `Content-Type,Authorization`). |
+| `exposedHeaders` | string/array | `Access-Control-Expose-Headers` on the actual response. |
+| `credentials` | boolean | When `true`, adds `Access-Control-Allow-Credentials: true`. |
+| `maxAge` | number | `Access-Control-Max-Age` (seconds) on the preflight only. |
+
+**Credentials + wildcard rule:** the Fetch spec forbids `Access-Control-Allow-Credentials: true` together with `Access-Control-Allow-Origin: *`. When `credentials: true` and `origin` resolves to `*`, the handler reflects the request `Origin` (with `Vary: Origin`) instead of emitting `*`, so credentialed cross-origin requests succeed.
+
+Configuration file:
+
+```yaml
+config:
+  cors:
+    origin:
+      - https://aux4.io
+      - http://localhost:5173
+    credentials: true
+    exposedHeaders:
+      - X-Total-Count
+    maxAge: 600
+  api:
+    "GET /contacts":
+      command: aux4 contacts list
+```
+
 ##### Limitations
 
 The event path has no live socket, so the following route kinds are **not supported** through `api handle` and are rejected explicitly:
