@@ -23,6 +23,8 @@ config:
       command: aux4 apitest flakyfail
     "GET /config-probe":
       command: aux4 apitest configprobe
+    "GET /whoami":
+      command: aux4 apitest whoami
   greeting:
     message: hello-from-config
 ```
@@ -109,6 +111,23 @@ config:
           ],
           "help": {
             "text": "Reads a value from the app config file forwarded via --configFile"
+          }
+        },
+        {
+          "name": "whoami",
+          "execute": [
+            "json:printf '%s' value(principal)",
+            "printf '{\"statusCode\":200,\"headers\":{\"Content-Type\":\"application/json\"},\"body\":\"%s\"}' value(response.sub)"
+          ],
+          "help": {
+            "text": "Echoes the authenticated principal's sub, injected via --principal from the gateway authorizer",
+            "variables": [
+              {
+                "name": "principal",
+                "text": "Authenticated principal JSON injected by the proxy layer",
+                "default": "{}"
+              }
+            ]
           }
         }
       ]
@@ -295,6 +314,29 @@ echo '{"httpMethod":"GET","path":"/config-probe","headers":{},"body":null,"isBas
     "content-type": "application/json"
   },
   "body": "hello-from-config",
+  "isBase64Encoded": false
+}
+```
+
+## authorizer principal passthrough
+
+### should surface requestContext.authorizer as the route command's principal
+
+An API Gateway custom authorizer validates the caller at the edge and passes the
+identity in `requestContext.authorizer`. `api handle` must carry that onto the
+route command as `--principal` so the command knows who called.
+
+```execute
+echo '{"httpMethod":"GET","path":"/whoami","headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"requestId":"r10","identity":{"sourceIp":"1.2.3.4"},"authorizer":{"sub":"user-abc-123","email":"dev@aux4.io"}}}' | aux4 api handle --configFile config.yaml
+```
+
+```expect:json
+{
+  "statusCode": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "user-abc-123",
   "isBase64Encoded": false
 }
 ```

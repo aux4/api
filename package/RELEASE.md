@@ -1,17 +1,16 @@
-# aux4/api 2.0.9
+# aux4/api 2.0.10
 
 ## Fixes
 
-### `api handle` forwards `--configFile` to route commands
+### `api handle` surfaces the API Gateway authorizer identity as the route command's principal
 
-Route commands frequently need to read the same app config the API was started
-with (e.g. `aux4 config get ...` for mail/service settings). They previously
-relied on the process working directory containing `config.yaml`, which holds for
-`api start` (run from the project directory) but **not** for `api handle` in a
-serverless runtime, where the config lives elsewhere (e.g. `/tmp/config.yaml`) and
-the CWD does not. Such a command failed with `No config file found`, and the
-handler returned a 500.
+When an api app is fronted by an API Gateway custom authorizer (for example the
+aux4.cloud SSO authorizer), the authorizer validates the caller at the edge and
+passes the authenticated identity in `event.requestContext.authorizer`. Until now
+`api handle` dropped it — the request was rebuilt internally and the identity
+never reached the route command.
 
-`api handle` now forwards its `--configFile` to every route command, so
-`aux4 config get`/`param(configFile:file)` resolves the shared app config
-regardless of the working directory. Commands that don't use it are unaffected.
+`api handle` now carries `requestContext.authorizer` onto the synthetic request
+and forwards it to the route command as `--principal`, so the command knows who
+called (matching how command-type deployments receive the caller's identity).
+Requests without an authorizer are unaffected.
