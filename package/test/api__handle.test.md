@@ -21,6 +21,10 @@ config:
       command: aux4 apitest flakyok
     "GET /flaky-fail":
       command: aux4 apitest flakyfail
+    "GET /config-probe":
+      command: aux4 apitest configprobe
+  greeting:
+    message: hello-from-config
 ```
 
 ```file:.aux4
@@ -95,6 +99,16 @@ config:
           ],
           "help": {
             "text": "Exits non-zero with no usable stdout"
+          }
+        },
+        {
+          "name": "configprobe",
+          "execute": [
+            "set:msg=!aux4 config get param(configFile:file) greeting/message",
+            "printf '{\"statusCode\":200,\"headers\":{\"Content-Type\":\"application/json\"},\"body\":\"%s\"}' value(msg)"
+          ],
+          "help": {
+            "text": "Reads a value from the app config file forwarded via --configFile"
           }
         }
       ]
@@ -257,6 +271,30 @@ echo '{"httpMethod":"GET","path":"/flaky-fail","headers":{},"body":null,"isBase6
     "content-type": "application/json; charset=utf-8"
   },
   "body": "{\"message\":\"Internal Server Error\",\"error\":\"Command failed\",\"statusCode\":500}",
+  "isBase64Encoded": false
+}
+```
+
+## config file forwarding
+
+### should forward --configFile to the route command so it can read the shared app config
+
+The route command needs the app's config file (contact/ses settings, etc.) but the
+process CWD in a serverless runtime is not the config directory. `api handle` forwards
+its `--configFile` to the route command so `aux4 config get` resolves the shared config
+regardless of CWD.
+
+```execute
+echo '{"httpMethod":"GET","path":"/config-probe","headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"requestId":"r9","identity":{"sourceIp":"1.2.3.4"}}}' | aux4 api handle --configFile config.yaml
+```
+
+```expect:json
+{
+  "statusCode": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "hello-from-config",
   "isBase64Encoded": false
 }
 ```

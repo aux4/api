@@ -148,7 +148,7 @@
         {
           "name": "handle",
           "execute": [
-            "stdin:node ${packageDir}/lib/server.js handle values(cors, api, ws, server, tls, security, production, components)"
+            "stdin:node ${packageDir}/lib/server.js handle values(cors, api, ws, server, tls, security, production, components, configFile)"
           ],
           "help": {
             "text": "Handle a single API Gateway REST v1 proxy event from stdin and emit the proxy response to stdout",
@@ -191,6 +191,11 @@
               {
                 "name": "components",
                 "text": "Component configuration",
+                "default": ""
+              },
+              {
+                "name": "configFile",
+                "text": "Path to the config file, forwarded to route commands as --configFile so they can read shared app config",
                 "default": ""
               }
             ]

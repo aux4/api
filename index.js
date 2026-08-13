@@ -35,6 +35,7 @@ async function main() {
       if (args[6]) config.security = parse(args[6]);
       if (args[7] === 'true') config.production = true;
       if (args[8]) config.components = parse(args[8]);
+      if (args[9]) config._configFile = args[9];
 
       await handleCommand(config);
       return;
