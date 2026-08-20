@@ -6,8 +6,8 @@ async function main() {
   try {
     const args = process.argv.slice(2);
 
-    if (args.length === 0 || !['start', 'stop', 'init', 'openapi', 'handle'].includes(args[0])) {
-      console.error('Usage: node index.js start|stop|init|openapi|handle');
+    if (args.length === 0 || !['start', 'stop', 'init', 'openapi', 'handle', 'lambda'].includes(args[0])) {
+      console.error('Usage: node index.js start|stop|init|openapi|handle|lambda');
       process.exit(1);
     }
 
@@ -16,8 +16,7 @@ async function main() {
       return;
     }
 
-    if (args[0] === 'handle') {
-      const { handleCommand } = require('./lib/handleCommand');
+    if (args[0] === 'handle' || args[0] === 'lambda') {
       const parse = value => {
         try {
           return JSON.parse(value);
@@ -37,7 +36,16 @@ async function main() {
       if (args[8]) config.components = parse(args[8]);
       if (args[9]) config._configFile = args[9];
 
-      await handleCommand(config);
+      if (args[0] === 'lambda') {
+        // Serve the event through the full Fastify app via @fastify/aws-lambda
+        // (static files, downloads, multipart) instead of the routing-only
+        // `handle` path.
+        const { lambdaCommand } = require('./lib/lambdaHandler');
+        await lambdaCommand(config);
+      } else {
+        const { handleCommand } = require('./lib/handleCommand');
+        await handleCommand(config);
+      }
       return;
     }
 

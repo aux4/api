@@ -275,6 +275,23 @@ This is the one-event-per-invocation entrypoint the AWS Lambda runtime calls whe
 
 CORS is honored on this path too — see [CORS](#cors) below.
 
+### Full-App Lambda (`api lambda`)
+
+`aux4 api handle` is routing-only: it never boots Fastify, so `@fastify/static`, convention-based views, and multipart parsing are not available. When you need the **whole application** behind API Gateway — REST **plus** static files, Handlebars views, and binary downloads — use `aux4 api lambda`.
+
+`api lambda` builds the same Fastify app as `api start` (all plugins registered) and wraps it with [`@fastify/aws-lambda`](https://github.com/fastify/aws-lambda-fastify), so one warm Lambda container serves every route. It reads a single API Gateway proxy event on stdin and writes the proxy response to stdout, just like `api handle`:
+
+```bash
+echo '{ "httpMethod": "GET", "path": "/static/logo.png", "headers": {}, "body": null, "isBase64Encoded": false, "requestContext": { "identity": { "sourceIp": "1.2.3.4" } } }' \
+  | aux4 api lambda --configFile config.yaml
+```
+
+- **URL layout** — REST routes live under `/api/`, static assets under `/static/`, and views at the root — the same split as `api start`. Clients call `/api/...` for the API and `/static/...` for assets.
+- **Static files and downloads work** — a `data:<mime>;base64,...` (or otherwise binary) response is returned with `isBase64Encoded: true` so the file survives API Gateway intact. Pair the gateway with `binaryMediaTypes = ["*/*"]` so it decodes the base64 back to bytes on the way out.
+- **Warm reuse** — the app is built once per container and reused across invocations (no per-request rebuild), unlike `api handle`.
+
+**Note:** WebSocket routes, SSE streaming (`stream: true`), and multipart **uploads** need a live socket and are not available through `api lambda` either — use `aux4 api start` for those. Use `api handle` when you only need REST routing with the smallest cold start; use `api lambda` when the app also serves static files or downloads.
+
 ## CORS
 
 `config.cors` configures Cross-Origin Resource Sharing and applies to **both** `api start` and `api handle`. On `api start` the headers are applied by `@fastify/cors`; on `api handle` (which never runs Fastify) the same headers are computed in-process. When `config.cors` is absent or empty, no `Access-Control-*` headers are emitted.

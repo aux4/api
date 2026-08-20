@@ -202,6 +202,62 @@
           }
         },
         {
+          "name": "lambda",
+          "execute": [
+            "stdin:node ${packageDir}/lib/server.js lambda values(cors, api, ws, server, tls, security, production, components, configFile)"
+          ],
+          "help": {
+            "text": "Serve a single API Gateway proxy event from stdin through the FULL Fastify app via @fastify/aws-lambda (static files + downloads + multipart), emitting the proxy response to stdout",
+            "variables": [
+              {
+                "name": "cors",
+                "text": "CORS configuration for the API",
+                "default": ""
+              },
+              {
+                "name": "api",
+                "text": "The endpoint mapping for the API",
+                "default": ""
+              },
+              {
+                "name": "ws",
+                "text": "The WebSocket route configuration",
+                "default": ""
+              },
+              {
+                "name": "server",
+                "text": "Server configuration including timeout and concurrency limits",
+                "default": ""
+              },
+              {
+                "name": "tls",
+                "text": "TLS configuration with key and cert file paths",
+                "default": ""
+              },
+              {
+                "name": "security",
+                "text": "Security configuration including auth, rate limiting, and IP allowlist",
+                "default": ""
+              },
+              {
+                "name": "production",
+                "text": "Enable production mode (secure cookies, template caching)",
+                "default": "false"
+              },
+              {
+                "name": "components",
+                "text": "Component configuration",
+                "default": ""
+              },
+              {
+                "name": "configFile",
+                "text": "Path to the config file, forwarded to route commands as --configFile so they can read shared app config",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
           "name": "package",
           "execute": [
             "profile:api:package"
