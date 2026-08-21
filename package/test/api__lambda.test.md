@@ -115,6 +115,21 @@ echo '{"httpMethod":"GET","path":"/api/nope","headers":{},"body":null,"isBase64E
 "statusCode":404
 ```
 
+### should route on the {proxy+} capture, ignoring a base path in event.path
+
+When fronted by an API Gateway custom domain with a base-path mapping, `event.path`
+still carries the base path (e.g. `/myapp/api/say`). Routing uses
+`event.pathParameters.proxy` (the greedy capture, `api/say`) instead, so the base
+path is ignored.
+
+```execute
+echo '{"httpMethod":"GET","path":"/myapp/api/say","pathParameters":{"proxy":"api/say"},"headers":{},"queryStringParameters":{"name":"Proxy"},"body":null,"isBase64Encoded":false,"requestContext":{"identity":{"sourceIp":"1.2.3.4"}}}' | aux4 api lambda --configFile config.yaml
+```
+
+```expect:partial
+hello Proxy
+```
+
 ## Static files
 
 ### should serve a static file from /static

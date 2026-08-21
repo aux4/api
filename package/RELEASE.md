@@ -1,17 +1,16 @@
-# aux4/api 2.0.13
+# aux4/api 2.0.14
 
 ## Fixes
 
-### Per-request temp directory now uses the OS temp dir (fixes AWS Lambda)
+### `api lambda` routes on the `{proxy+}` capture, so custom-domain base paths work
 
-The per-request temporary folder (used for multipart upload parts) was created
-under the process **working directory** (`./.tmp/<uuid>`). On AWS Lambda the
-working directory (`/var/task`) is **read-only**, so every request failed with
-`ENOENT: no such file or directory, mkdir '.../.tmp/...'` — a `500` on all routes,
-including plain REST and downloads that never touch uploads.
+When an `api lambda` function is fronted by an API Gateway **custom domain with a
+base-path mapping** (e.g. `https://<host>/<basepath>/api/hello`), `event.path`
+still contains the base path (`/<basepath>/api/hello`) — API Gateway does not strip
+it. Routing on `event.path` therefore 404'd every request through the custom domain.
 
-It now roots that folder at the OS temp dir (`os.tmpdir()/aux4-api/<uuid>`), which
-is writable everywhere — including Lambda (`/tmp`). No behavior change off Lambda;
-`request.tmpDir` remains an absolute path and is still cleaned up when the response
-finishes. This makes `api lambda` (and any containerized `api start`) serve
-correctly behind API Gateway.
+`api lambda` now routes on `event.pathParameters.proxy` (the `{proxy+}` greedy
+capture), which is the path **after** both base-path and stage stripping
+(`api/hello`) — identical for the raw `execute-api` URL and the custom domain. It
+falls back to `event.path` when there is no proxy parameter (e.g. the root resource
+or non-API-Gateway events), so existing behavior is unchanged.
