@@ -258,6 +258,62 @@
           }
         },
         {
+          "name": "lambda-loop",
+          "execute": [
+            "node ${packageDir}/lib/server.js lambda-loop values(cors, api, ws, server, tls, security, production, components, configFile)"
+          ],
+          "help": {
+            "text": "Long-lived cloud runtime: build the FULL Fastify app ONCE and own the AWS Lambda runtime API loop, reusing the warm app across every invocation (no per-call process/app rebuild). An optional AUX4_LAMBDA_POST_INVOKE shell hook runs after each response for state sync",
+            "variables": [
+              {
+                "name": "cors",
+                "text": "CORS configuration for the API",
+                "default": ""
+              },
+              {
+                "name": "api",
+                "text": "The endpoint mapping for the API",
+                "default": ""
+              },
+              {
+                "name": "ws",
+                "text": "The WebSocket route configuration",
+                "default": ""
+              },
+              {
+                "name": "server",
+                "text": "Server configuration including timeout and concurrency limits",
+                "default": ""
+              },
+              {
+                "name": "tls",
+                "text": "TLS configuration with key and cert file paths",
+                "default": ""
+              },
+              {
+                "name": "security",
+                "text": "Security configuration including auth, rate limiting, and IP allowlist",
+                "default": ""
+              },
+              {
+                "name": "production",
+                "text": "Enable production mode (secure cookies, template caching)",
+                "default": "false"
+              },
+              {
+                "name": "components",
+                "text": "Component configuration",
+                "default": ""
+              },
+              {
+                "name": "configFile",
+                "text": "Path to the config file, forwarded to route commands as --configFile so they can read shared app config",
+                "default": ""
+              }
+            ]
+          }
+        },
+        {
           "name": "package",
           "execute": [
             "profile:api:package"
