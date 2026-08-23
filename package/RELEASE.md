@@ -1,20 +1,23 @@
-# aux4/api 2.0.16
+# aux4/api 2.0.17
 
 ## Features
 
-### `lambda-loop` — warm, long-lived Lambda runtime for the cloud
+### Warm aux4 command daemon for the cloud runtime
 
-New `api lambda-loop` mode: build the Fastify app **once** and own the AWS Lambda
-runtime API loop, reusing the warm app across every invocation. The previous
-cloud path spawned a fresh `api lambda` per invocation, rebuilding Fastify each
-call (~1s); with `lambda-loop` the build cost is paid once per cold start and
-warm invocations drop to a few milliseconds. It runs entirely in Node (no aux4
-daemon), and an optional `AUX4_LAMBDA_POST_INVOKE` shell hook runs **after** the
-response is posted so stateful runtimes can sync state without adding latency.
+The cloud `api lambda-loop` runtime now starts a warm aux4 daemon and routes
+command-backed requests through it, so each `aux4 <command>` — and any nested
+`aux4` calls that command makes — reuses the warm CLI instead of cold-starting it
+(~200ms) on every request. The win compounds for routes whose command fans out
+into several `aux4` calls.
 
-```bash
-# cloud runtime entrypoint (persistent process owning the runtime loop)
-AWS_LAMBDA_RUNTIME_API=… aux4 api lambda-loop --configFile /tmp/config.yaml
-```
-
-`api lambda` (one event from stdin, then exit) is unchanged for CLI/local use.
+Design notes:
+- The daemon is started **only** by the long-lived `lambda-loop` runtime (one
+  request per container). The general `api start` server does **not** start it —
+  the daemon serializes commands and can't stream, which would break concurrent
+  requests and SSE.
+- The socket lives at `AUX4_DAEMON_SOCKET` (a fixed writable path), so the daemon
+  and its command clients agree on it **without changing any working directory**
+  (route commands keep their CWD). Requires **aux4 core ≥ 5.2.7**.
+- Streaming responses (SSE) always cold-spawn (they can't go through the daemon).
+- Best-effort: if the daemon can't start, route commands fall back to cold spawns.
+  Disable entirely with `AUX4_API_NO_COMMAND_DAEMON`.
