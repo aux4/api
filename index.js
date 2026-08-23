@@ -6,8 +6,8 @@ async function main() {
   try {
     const args = process.argv.slice(2);
 
-    if (args.length === 0 || !['start', 'stop', 'init', 'openapi', 'handle', 'lambda'].includes(args[0])) {
-      console.error('Usage: node index.js start|stop|init|openapi|handle|lambda');
+    if (args.length === 0 || !['start', 'stop', 'init', 'openapi', 'handle', 'lambda', 'lambda-loop'].includes(args[0])) {
+      console.error('Usage: node index.js start|stop|init|openapi|handle|lambda|lambda-loop');
       process.exit(1);
     }
 
@@ -16,7 +16,7 @@ async function main() {
       return;
     }
 
-    if (args[0] === 'handle' || args[0] === 'lambda') {
+    if (args[0] === 'handle' || args[0] === 'lambda' || args[0] === 'lambda-loop') {
       const parse = value => {
         try {
           return JSON.parse(value);
@@ -36,10 +36,18 @@ async function main() {
       if (args[8]) config.components = parse(args[8]);
       if (args[9]) config._configFile = args[9];
 
-      if (args[0] === 'lambda') {
+      if (args[0] === 'lambda-loop') {
+        // Long-lived Lambda runtime loop: build the Fastify app ONCE and own the
+        // runtime API loop, reusing the warm app across invocations. This is the
+        // cloud runtime's warm path — no per-invocation process/app rebuild (the
+        // ~1s cost of respawning `lambda` per call), and pure Node so it avoids
+        // the aux4 daemon's nested-call deadlock.
+        const { lambdaLoop } = require('./lib/lambdaHandler');
+        await lambdaLoop(config);
+      } else if (args[0] === 'lambda') {
         // Serve the event through the full Fastify app via @fastify/aws-lambda
         // (static files, downloads, multipart) instead of the routing-only
-        // `handle` path.
+        // `handle` path. One event from stdin then exit (CLI / local).
         const { lambdaCommand } = require('./lib/lambdaHandler');
         await lambdaCommand(config);
       } else {
