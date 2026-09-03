@@ -1,4 +1,4 @@
-# aux4/api 2.0.18
+# aux4/api 2.0.19
 
 ## Fixed
 
@@ -8,6 +8,11 @@
   is unusable and the app registered zero routes → every request 404'd. `buildHandler` now
   reads the app config from `--configFile` (`api`, `cors`, `server`, `components`, …) — the
   same source `api openapi` uses — so routes register correctly under the warm runtime.
+
+- **Reverted work-in-progress accidentally bundled into 2.0.18.** 2.0.18 also contained an
+  unrelated, unfinished in-process pre/post-invoke experiment that was swept in by mistake.
+  This release keeps only the config-file routing fix; the experiment is parked on a branch
+  for deliberate review.
 
 ## Added
 
