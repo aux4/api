@@ -1,23 +1,17 @@
-# aux4/api 2.0.17
+# aux4/api 2.0.18
 
-## Features
+## Fixed
 
-### Warm aux4 command daemon for the cloud runtime
+- **Warm Lambda runtime (`lambda-loop` / `lambda`) now loads routes from the config file.**
+  The warm path built its app from the `config.api` command argument, but when routes are
+  supplied via `--configFile` (aux4/config serializes the object as non-JSON), that argument
+  is unusable and the app registered zero routes → every request 404'd. `buildHandler` now
+  reads the app config from `--configFile` (`api`, `cors`, `server`, `components`, …) — the
+  same source `api openapi` uses — so routes register correctly under the warm runtime.
 
-The cloud `api lambda-loop` runtime now starts a warm aux4 daemon and routes
-command-backed requests through it, so each `aux4 <command>` — and any nested
-`aux4` calls that command makes — reuses the warm CLI instead of cold-starting it
-(~200ms) on every request. The win compounds for routes whose command fans out
-into several `aux4` calls.
+## Added
 
-Design notes:
-- The daemon is started **only** by the long-lived `lambda-loop` runtime (one
-  request per container). The general `api start` server does **not** start it —
-  the daemon serializes commands and can't stream, which would break concurrent
-  requests and SSE.
-- The socket lives at `AUX4_DAEMON_SOCKET` (a fixed writable path), so the daemon
-  and its command clients agree on it **without changing any working directory**
-  (route commands keep their CWD). Requires **aux4 core ≥ 5.2.7**.
-- Streaming responses (SSE) always cold-spawn (they can't go through the daemon).
-- Best-effort: if the daemon can't start, route commands fall back to cold spawns.
-  Disable entirely with `AUX4_API_NO_COMMAND_DAEMON`.
+- **Per-invocation config reload for the warm runtime.** `lambda-loop` re-checks the config
+  file's mtime on each invocation and rebuilds the app **only when it changed** (a cheap
+  `stat`; a no-op on the common unchanged path). A warm container picks up a hot-updated
+  config without a redeploy, while the cold-start warm-reuse optimization is preserved.
