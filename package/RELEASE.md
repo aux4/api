@@ -1,22 +1,12 @@
-# aux4/api 2.0.19
-
-## Fixed
-
-- **Warm Lambda runtime (`lambda-loop` / `lambda`) now loads routes from the config file.**
-  The warm path built its app from the `config.api` command argument, but when routes are
-  supplied via `--configFile` (aux4/config serializes the object as non-JSON), that argument
-  is unusable and the app registered zero routes → every request 404'd. `buildHandler` now
-  reads the app config from `--configFile` (`api`, `cors`, `server`, `components`, …) — the
-  same source `api openapi` uses — so routes register correctly under the warm runtime.
-
-- **Reverted work-in-progress accidentally bundled into 2.0.18.** 2.0.18 also contained an
-  unrelated, unfinished in-process pre/post-invoke experiment that was swept in by mistake.
-  This release keeps only the config-file routing fix; the experiment is parked on a branch
-  for deliberate review.
+# aux4/api 2.0.20
 
 ## Added
 
-- **Per-invocation config reload for the warm runtime.** `lambda-loop` re-checks the config
-  file's mtime on each invocation and rebuilds the app **only when it changed** (a cheap
-  `stat`; a no-op on the common unchanged path). A warm container picks up a hot-updated
-  config without a redeploy, while the cold-start warm-reuse optimization is preserved.
+- **`security.auth.disableWhenEnv`** — a deploy-time kill switch for endpoint
+  auth. When set to the name of an environment variable (e.g.
+  `disableWhenEnv: OAUTH_APP_PUBLIC`), auth is turned off wholesale whenever that
+  env var is `"true"`: `enabled` reports `false`, protected routes skip the
+  validate command, and a token-less caller is allowed with a `null` principal
+  instead of receiving a 401. Unset or any non-`"true"` value leaves auth fully
+  enforced. This lets one image ship as either a secured or a fully-open service
+  (e.g. an OAuth broker) without editing `config.yaml`.
