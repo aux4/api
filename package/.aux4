@@ -10,7 +10,7 @@
   ],
   "dependencies": [
     "aux4/config",
-    "aux4/oauth"
+    "aux4/oauth@^0.1.7"
   ],
   "system": [
     [
