@@ -1,12 +1,26 @@
-# aux4/api 2.0.20
+# Release notes
 
 ## Added
 
-- **`security.auth.disableWhenEnv`** — a deploy-time kill switch for endpoint
-  auth. When set to the name of an environment variable (e.g.
-  `disableWhenEnv: OAUTH_APP_PUBLIC`), auth is turned off wholesale whenever that
-  env var is `"true"`: `enabled` reports `false`, protected routes skip the
-  validate command, and a token-less caller is allowed with a `null` principal
-  instead of receiving a 401. Unset or any non-`"true"` value leaves auth fully
-  enforced. This lets one image ship as either a secured or a fully-open service
-  (e.g. an OAuth broker) without editing `config.yaml`.
+- **`server.basePath`** — a configurable mount prefix for declared REST routes,
+  defaulting to `/api` so existing servers are unchanged. Set it to a custom prefix
+  (e.g. `/v1`) to serve declared routes there, or to `/` (or `""`) for **root mount**,
+  which serves declared routes at bare paths. Root mount lets an aux4/api server stand
+  in for a real host — a programmable mock, a webhook receiver, a site root — so a
+  request like `GET /anything` reaches the mounted command directly instead of only
+  under `/api/`.
+
+  Under root mount the REST handler registers a bare `/*` catch-all, and Fastify's
+  router gives more-specific registered routes priority over it: static files
+  (`/static/`), the uploads directory (`/media/`), the OAuth web-login routes
+  (`/auth/...`), WebSocket routes, and the views `index.hbs` SPA 404-fallback all
+  continue to work — only paths no other handler owns reach the catch-all. CORS
+  preflight (`OPTIONS`) is handled by the CORS layer at root.
+
+## Notes
+
+- With no `basePath` configured, behavior is byte-identical to before: declared routes
+  serve under `/api`.
+- Under root mount a global `security.allowedIPs` applies to every path (there is no
+  prefix to carve out for per-route overrides), so a per-route `allowedIPs` cannot
+  loosen the global list in that mode.

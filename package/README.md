@@ -32,6 +32,7 @@ aux4 api stop
 config:
   port: 8080
   server:
+    basePath: /api            # mount prefix for declared routes (default: /api)
     timeout: 30000
     maxConcurrency: 50
     maxQueue: 200
@@ -107,6 +108,39 @@ config:
 ```
 
 The command receives the method via the stdin event's `httpMethod` (also `requestContext.httpMethod`) and the full request path via `--params` as `{"path":"the/rest/of/the/path"}` (i.e. `${params.path}`, or `.pathParameters.path` in the event). The original path is also on the event as `path` and `requestContext.path`.
+
+### Mount Prefix
+
+Every route declared in `config.api` is served under a mount prefix. By default the prefix is `/api`, so a route declared `GET /hello` is reachable at `/api/hello`. Set `server.basePath` to change it:
+
+```yaml
+config:
+  server:
+    basePath: /v1      # default: /api
+  api:
+    "GET /hello":
+      command: aux4 say-hello
+```
+
+With `basePath: /v1`, the route above is served at `/v1/hello` and nowhere else. The command still receives the app-facing path (`/hello`) in the event — the prefix is a mount concern, not part of the path the command sees.
+
+- **Normalization** — a leading slash is added if missing (`v1` → `/v1`), a trailing slash is stripped (`/api/` === `/api`). The default (unset) is `/api`.
+- **Root mount** — set `basePath` to `/` (or `""`) to serve declared routes at **bare paths**, with no prefix at all. This is what lets an aux4/api server stand in for a real host (a programmable mock, a webhook receiver, a site root):
+
+    ```yaml
+    config:
+      server:
+        basePath: /
+      api:
+        "ANY /{path...}":
+          command: aux4 my-handler respond
+    ```
+
+    Now `curl http://localhost:8080/anything` reaches the command directly.
+
+**Root mount and other route owners.** Under root mount the REST handler registers a bare `/*` catch-all. Fastify's router gives more-specific registered routes priority over that wildcard, so static files (`/static/`), the uploads directory (`/media/`), the OAuth web-login routes (`/auth/...`), WebSocket routes, and the views `index.hbs` SPA 404-fallback all continue to work — the catch-all only handles paths no other handler owns. CORS preflight (`OPTIONS`) is handled by the CORS layer at root, so declared routes do not receive `OPTIONS` when root-mounted.
+
+**Note:** with a global `security.allowedIPs` list, a normal prefix carves out the mounted API so each route can override the allowlist per-route (`allowedIPs` on the route). Under root mount there is no prefix to carve out, so the global allowlist applies to every path and a per-route `allowedIPs` cannot loosen it.
 
 ### Command Variables
 

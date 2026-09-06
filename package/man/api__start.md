@@ -5,6 +5,7 @@ Launches a Fastify-based HTTP server that bridges web requests to CLI commands u
 The server supports:
 
 - **REST API** endpoints that map HTTP routes to commands (event piped via stdin, response via stdout)
+- **Configurable mount prefix** — declared routes are served under `server.basePath` (default `/api`); set it to `/v1` to serve there, or to `/` (or `""`) for ROOT MOUNT, serving declared routes at bare paths
 - **Wildcard methods and catch-all paths** — `ANY` (or `*`) matches every HTTP method; `{path...}` greedily captures the rest of the path
 - **WebSocket** connections following AWS API Gateway WebSocket patterns
 - **Convention-based views** using Handlebars templates from the `views/` directory
@@ -73,7 +74,24 @@ The `command` field specifies the full shell command to execute. The API Gateway
 - **`data:<mimetype>;base64,<data>`** — binary response with auto Content-Type and optional `filename` parameter
 - **Command fails** — 500 with stdout/stderr as body
 
-REST API routes are served at `/api/*`. Views from `views/` are served as GET routes. Static files from `static/` are served at `/static/*`. WebSocket management API is available at `POST /@connections/:connectionId` and `DELETE /@connections/:connectionId`.
+REST API routes are served under the mount prefix `server.basePath` (default `/api`, so `/api/*`). Views from `views/` are served as GET routes. Static files from `static/` are served at `/static/*`. WebSocket management API is available at `POST /@connections/:connectionId` and `DELETE /@connections/:connectionId`.
+
+#### Mount Prefix
+
+Declared routes are served under `server.basePath`. The default is `/api`, so `GET /hello` is reachable at `/api/hello`. A leading slash is added if missing (`v1` → `/v1`) and a trailing slash is stripped (`/api/` === `/api`). The command always receives the app-facing path (`/hello`) — the prefix is a mount concern, not part of the path the command sees.
+
+Set `basePath` to `/` (or `""`) for **root mount**: declared routes are served at bare paths, letting the server stand in for a real host (a programmable mock, a webhook receiver, a site root).
+
+```yaml
+config:
+  server:
+    basePath: /            # root mount — bare paths
+  api:
+    "ANY /{path...}":
+      command: aux4 my-handler respond
+```
+
+Under root mount the REST handler registers a bare `/*` catch-all. Fastify gives more-specific registered routes priority over it, so `/static/`, `/media/`, the OAuth `/auth/...` routes, WebSocket, and the views `index.hbs` SPA 404-fallback all keep working; only paths no other handler owns reach the catch-all. CORS preflight (`OPTIONS`) is handled by the CORS layer at root. With a global `security.allowedIPs`, root mount applies it to every path (no prefix to carve out), and a per-route `allowedIPs` cannot loosen it.
 
 #### Route Matching
 
