@@ -23,6 +23,28 @@ Use this as the AWS Lambda entrypoint when deploying a multi-route aux4/api app 
 - **Response contract** — same as `api start`: a command that emits JSON with a `statusCode` produces that gateway response; plain JSON is wrapped as `200 application/json`; a `data:<mime>;base64,...` (or otherwise binary) response is returned with `isBase64Encoded: true` and its `Content-Disposition` preserved so a file download survives API Gateway.
 - **Binary downloads** — because binary responses come back base64-encoded, the API Gateway must set `binaryMediaTypes = ["*/*"]` so it decodes the base64 back to bytes for the client. The base64 decision is made from the response `Content-Type`: text-ish types (`text/*`, `application/json|javascript|xml`, `image/svg`) pass through as UTF-8; everything else is treated as binary.
 
+##### Structured Cloud workflows
+
+The Cloud VM's long-lived runtime also accepts trusted `aux4.execution.v1`
+workflow events. It checks the execution grant's command prefix on every phase,
+reuses valid grants for at most five minutes (30 seconds before credential or
+execution expiry), and drops the grant after a final result. Grants are never
+persisted. Missing or invalid expiry information disables reuse. A 401 or 403
+from the read-only grant exchange permits one retry; failed commands are never
+replayed automatically. Pre/post synchronization preserves the checkpoint
+barrier before the next workflow phase.
+
+Runtime stderr includes `aux4.timing` JSON records for `sync.pre`, `grant.cache`,
+`grant.fetch`, `command.validation`, `command.execution`, `sync.post`,
+`completion` (final results), and `phase.total`. Each record contains a safe
+`traceId`, fixed phase/span labels, `durationMs`, `status`, `cacheHit`, and
+`cold` (first structured execution in this container). No arguments, prompts,
+command output, tokens, or machine keys appear in these records. Child commands
+receive `AUX4_TRACE_ID` and `AUX4_EXECUTION_PHASE`; only matching valid child
+spans are copied to the runtime log, leaving command output unchanged. An
+event's `traceId` (or `X-Aux4-Trace-Id` header) is accepted only as 32 lowercase
+hexadecimal characters; otherwise the runtime hashes its execution id.
+
 ##### Limitations
 
 The adapter drives a request/response cycle, not a live socket, so the following need `aux4 api start` instead and are **not** available through `api lambda`:

@@ -10,6 +10,26 @@ In Cloud VM images, the warm Lambda loop also accepts trusted
 `aux4.execution.v1` events. These carry an opaque execution id and a structured
 command array. The runtime retrieves a short-lived token from the Cloud control
 plane using the VM's own identity, then executes the command without a shell.
+Warm phases can reuse their grant for up to five minutes, bounded by credential
+and execution expiry with a 30-second safety margin. Every phase checks the
+authorized command prefix, and a final result removes its cached grant. Grants
+remain in memory only; missing or invalid expiry information disables reuse.
+
+Structured executions emit JSON timing records to runtime stderr with
+`type: "aux4.timing"`. Spans cover `sync.pre`, `grant.cache`, `grant.fetch`,
+`command.validation`, `command.execution`, `sync.post`, `completion` (final
+results), and `phase.total`. Records contain a hashed execution correlation
+(`traceId`), a fixed phase name, elapsed milliseconds, status, cache-hit flag,
+and a flag identifying the container's first structured execution. They exclude
+command arguments, prompts, results, tokens, and machine credentials. Child
+commands receive `AUX4_TRACE_ID` and `AUX4_EXECUTION_PHASE`; valid matching child
+timing records are also copied into the runtime log without altering command
+output. A trusted event may provide a 32-character lowercase hexadecimal
+`traceId` (or `X-Aux4-Trace-Id` header) for correlation across services.
+
+Only a read-only grant exchange rejected with 401 or 403 is retried once.
+Failed commands are never replayed automatically. State is synchronized before
+execution and durably checkpointed before the workflow advances.
 
 ## Installation
 

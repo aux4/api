@@ -1,3 +1,15 @@
+# aux4/api 2.0.28
+
+## Changed
+
+- Warm structured execution phases reuse bounded, expiry-aware execution grants,
+  validate each command prefix, and evict grants on final results. Read-only
+  grant exchanges retry once on authentication rejection; commands never replay.
+- Structured execution logs include correlated JSON timing spans for grant
+  retrieval, command validation/execution, checkpoint synchronization, completion,
+  and total phase duration. Matching child timing spans are forwarded without
+  exposing credentials or changing command output.
+
 # aux4/api 2.0.27
 
 ## Fixed
