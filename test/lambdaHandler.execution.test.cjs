@@ -1,5 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
 const Command = require("../lib/Command");
 const {
   assertAuthorizedCommand,
@@ -149,4 +150,59 @@ test("execution hook failure prevents an execution phase from running", async t 
     /state pull failed/
   );
   assert.equal(invoked, false);
+});
+
+test("structured execution uses the cloud file sync in-process entry points", async t => {
+  const originalFetch = global.fetch;
+  const originalExecuteFile = Command.executeFile;
+  const originalCalls = globalThis.__aux4ExecutionSyncCalls;
+  const originalEnv = { ...process.env };
+  t.after(() => {
+    global.fetch = originalFetch;
+    Command.executeFile = originalExecuteFile;
+    globalThis.__aux4ExecutionSyncCalls = originalCalls;
+    process.env = originalEnv;
+  });
+
+  process.env.AUX4_CLOUD_API_URL = "https://dev.api.aux4.cloud";
+  process.env.CLOUD_SYNC_TOKEN = "machine-key";
+  process.env.AUX4_LAMBDA_EXECUTION_SYNC_MODULE = path.join(
+    __dirname,
+    "fixtures",
+    "execution-sync.mjs"
+  );
+  delete process.env.AUX4_LAMBDA_EXECUTION_PRE_INVOKE;
+  delete process.env.AUX4_LAMBDA_EXECUTION_POST_INVOKE;
+  globalThis.__aux4ExecutionSyncCalls = [];
+
+  global.fetch = async url => {
+    if (url.endsWith("/token")) {
+      return {
+        ok: true,
+        json: async () => ({
+          accessToken: "delegated-token",
+          command: "agent-manager kb orchestrate"
+        })
+      };
+    }
+    return { ok: true };
+  };
+  Command.executeFile = async () => ({
+    exitCode: 0,
+    stdout: '{"status":"final","text":"done"}',
+    stderr: ""
+  });
+
+  const traceId = "abcdef0123456789abcdef0123456789";
+  await handleExecutionEvent({
+    version: "aux4.execution.v1",
+    executionId: "00abc1234_00000000-0000-4000-8000-000000000004",
+    traceId,
+    command: ["agent-manager", "kb", "orchestrate", "call-llm"]
+  });
+
+  assert.deepEqual(globalThis.__aux4ExecutionSyncCalls, [
+    { operation: "pull", traceId },
+    { operation: "push", traceId }
+  ]);
 });

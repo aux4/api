@@ -1,3 +1,12 @@
+# aux4/api 2.0.32
+
+## Changed
+
+- Structured Cloud execution phases can call the existing cloud-file-sync
+  `pullFromEnv` and `pushFromEnv` entry points in-process. Cloud images opt in
+  with `AUX4_LAMBDA_EXECUTION_SYNC_MODULE`; other installations retain the
+  command-hook fallback.
+
 # aux4/api 2.0.31
 
 ## Changed
