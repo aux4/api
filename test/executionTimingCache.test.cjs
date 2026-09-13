@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 const Command = require("../lib/Command");
 const { ExecutionGrantCache, cacheDeadline } = require("../lib/ExecutionGrantCache");
 const { handleExecutionEvent } = require("../lib/lambdaHandler");
+const { relayRequestTimings } = require("../lib/ExecutionTiming");
 
 const now = 1800000000000;
 const grant = (overrides = {}) => ({
@@ -173,4 +174,18 @@ test("correlation overrides are restricted and failures still close their timing
   }), /secret-error-detail/);
   assert.deepEqual(f.lines.map(line => [line.span, line.status]), [["sync.pre", "error"], ["phase.total", "error"]]);
   assert.equal(JSON.stringify(f.lines).includes("secret"), false);
+});
+
+test("HTTP routes relay only exact broker timing records", () => {
+  const traceId = "0123456789abcdef0123456789abcdef";
+  const valid = { type: "aux4.timing", traceId, phase: "broker", span: "model.inference", durationMs: 12.5, status: "ok" };
+  const emitted = [];
+  relayRequestTimings({ "X-Aux4-Trace-Id": traceId }, [
+    JSON.stringify(valid),
+    JSON.stringify({ ...valid, token: "secret" }),
+    JSON.stringify({ ...valid, phase: "call-llm" }),
+    JSON.stringify({ ...valid, traceId: "abcdef0123456789abcdef0123456789" }),
+    "ordinary stderr"
+  ].join("\n"), line => emitted.push(JSON.parse(line)));
+  assert.deepEqual(emitted, [valid]);
 });

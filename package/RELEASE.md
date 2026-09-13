@@ -1,3 +1,11 @@
+# aux4/api 2.0.31
+
+## Changed
+
+- Auth and route commands may emit strict, trace-matched broker timing records on
+  stderr. The API relays only the bounded timing schema, leaving ordinary stderr,
+  credentials, request data, and command output private.
+
 # aux4/api 2.0.30
 
 ## Fixed
