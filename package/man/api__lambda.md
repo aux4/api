@@ -27,9 +27,10 @@ Use this as the AWS Lambda entrypoint when deploying a multi-route aux4/api app 
 
 The Cloud VM's long-lived runtime also accepts trusted `aux4.execution.v1`
 workflow events. It checks the execution grant's command prefix on every phase,
-reuses valid grants for at most five minutes (30 seconds before credential or
+reuses valid grants for at most five minutes (60 seconds before credential or
 execution expiry), and drops the grant after a final result. Grants are never
-persisted. Missing or invalid expiry information disables reuse. A 401 or 403
+persisted. Both credential and execution expiry must be valid numeric timestamps;
+missing or invalid information for either disables reuse. A 401 or 403
 from the read-only grant exchange permits one retry; failed commands are never
 replayed automatically. Pre/post synchronization preserves the checkpoint
 barrier before the next workflow phase.

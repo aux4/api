@@ -1,3 +1,10 @@
+# aux4/api 2.0.30
+
+## Fixed
+
+- Execution grants are cached only when both credential and execution expiry
+  timestamps are valid, with a 60-second safety margin before the earliest bound.
+
 # aux4/api 2.0.29
 
 ## Fixed

@@ -11,9 +11,10 @@ In Cloud VM images, the warm Lambda loop also accepts trusted
 command array. The runtime retrieves a short-lived token from the Cloud control
 plane using the VM's own identity, then executes the command without a shell.
 Warm phases can reuse their grant for up to five minutes, bounded by credential
-and execution expiry with a 30-second safety margin. Every phase checks the
+and execution expiry with a 60-second safety margin. Every phase checks the
 authorized command prefix, and a final result removes its cached grant. Grants
-remain in memory only; missing or invalid expiry information disables reuse.
+remain in memory only; both credential and execution expiry must be valid numeric
+timestamps, and missing or invalid information for either disables reuse.
 
 Structured executions emit JSON timing records to runtime stderr with
 `type: "aux4.timing"`. Spans cover `sync.pre`, `grant.cache`, `grant.fetch`,

@@ -12,12 +12,23 @@ const grant = (overrides = {}) => ({
 
 test("cache respects both expiry bounds, token exp, safety margin, and five-minute cap", () => {
   assert.equal(cacheDeadline(grant(), now), now + 300000);
-  assert.equal(cacheDeadline(grant({ expiresAt: now / 1000 + 100 }), now), now + 70000);
-  assert.equal(cacheDeadline(grant({ executionExpiresAt: now / 1000 + 50 }), now), now + 20000);
-  const jwt = `header.${Buffer.from(JSON.stringify({ exp: now / 1000 + 40 })).toString("base64url")}.signature`;
+  assert.equal(cacheDeadline(grant({ expiresAt: now / 1000 + 100 }), now), now + 40000);
+  assert.equal(cacheDeadline(grant({ executionExpiresAt: now / 1000 + 80 }), now), now + 20000);
+  const jwt = `header.${Buffer.from(JSON.stringify({ exp: now / 1000 + 70 })).toString("base64url")}.signature`;
   assert.equal(cacheDeadline(grant({ accessToken: jwt }), now), now + 10000);
   assert.equal(cacheDeadline(grant({ expiresAt: "invalid" }), now), now);
   assert.equal(cacheDeadline(grant({ expiresAt: undefined, executionExpiresAt: undefined }), now), now);
+  for (const name of ["expiresAt", "executionExpiresAt"]) {
+    for (const value of [undefined, null, true, [], "1800000600", NaN, Infinity, 0, -1]) {
+      assert.equal(cacheDeadline(grant({ [name]: value, accessToken: jwt }), now), now);
+    }
+    const cache = new ExecutionGrantCache();
+    cache.set("boundary", grant({ [name]: now / 1000 + 60 }), now);
+    assert.equal(cache.get("boundary", now), null);
+    cache.set("boundary", grant({ [name]: now / 1000 + 61 }), now);
+    assert.ok(cache.get("boundary", now + 999));
+    assert.equal(cache.get("boundary", now + 1000), null);
+  }
 });
 
 test("cache is bounded, execution-isolated, LRU, and expires at the boundary", () => {
