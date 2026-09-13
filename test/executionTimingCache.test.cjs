@@ -154,6 +154,9 @@ test("correlation overrides are restricted and failures still close their timing
   assert.equal(header, traceId);
   assert.ok(f.lines.every(line => line.traceId === traceId));
   f.lines.length = 0;
+  await handleExecutionEvent({ ...f.event, traceId: [traceId] }, f.options);
+  assert.ok(f.lines.every(line => typeof line.traceId === "string" && line.traceId !== traceId));
+  f.lines.length = 0;
   await assert.rejects(handleExecutionEvent({ ...f.event, traceId: "secret-token" }, {
     ...f.options, runHook: () => { throw new Error("secret-error-detail"); }
   }), /secret-error-detail/);

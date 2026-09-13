@@ -1,3 +1,10 @@
+# aux4/api 2.0.29
+
+## Fixed
+
+- Trace correlation overrides now require a string, rejecting arrays or other
+  values that can coerce to a valid identifier.
+
 # aux4/api 2.0.28
 
 ## Changed
