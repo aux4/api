@@ -1,3 +1,29 @@
+# aux4/api 2.0.27
+
+## Fixed
+
+- Structured Cloud executions now support synchronous pre/post invocation hooks.
+  Stateful agent phases can refresh their session checkpoint before a command and
+  durably upload it before Step Functions advances, even when consecutive phases
+  run in different warm Lambda containers.
+
+# aux4/api 2.0.26
+
+## Changed
+
+- OAuth web sessions are now opaque AES-256-GCM envelopes containing identity
+  and provider token material. Access tokens refresh server-side near expiry and
+  the rotated session is returned as an HttpOnly cookie.
+- Authenticated route commands receive the validated user access token through
+  request-local `AUX4_ACCESS_TOKEN`. The principal remains identity-only, and
+  the warm command daemon preserves the per-invocation environment.
+- Existing identity-only signed session cookies remain valid until their normal
+  expiry.
+- The warm Lambda runtime accepts structured `aux4.execution.v1` events from Step
+  Functions. It exchanges an opaque execution id through the Cloud control plane
+  and invokes a validated aux4 command array without a shell or token in workflow
+  history.
+
 # aux4/api 2.0.20
 
 ## Added
