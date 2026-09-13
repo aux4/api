@@ -1,3 +1,12 @@
+# aux4/api 2.0.27
+
+## Fixed
+
+- Structured Cloud executions now support synchronous pre/post invocation hooks.
+  Stateful agent phases can refresh their session checkpoint before a command and
+  durably upload it before Step Functions advances, even when consecutive phases
+  run in different warm Lambda containers.
+
 # aux4/api 2.0.26
 
 ## Changed
