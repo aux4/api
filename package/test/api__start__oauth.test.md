@@ -18,9 +18,22 @@ const server = http.createServer((req, res) => {
     req.on("data", c => (body += c));
     req.on("end", () => {
       const params = new URLSearchParams(body);
-      if (params.get("code") === "good-code") {
+      if (params.get("grant_type") === "refresh_token" && params.get("refresh_token") === "mock-refresh-token") {
         res.writeHead(200, { "Content-Type": "application/json" });
-        res.end(JSON.stringify({ access_token: "mock-access-token", token_type: "Bearer" }));
+        res.end(JSON.stringify({
+          access_token: "mock-refreshed-access-token",
+          refresh_token: "mock-rotated-refresh-token",
+          token_type: "Bearer",
+          expires_in: 3600
+        }));
+      } else if (params.get("code") === "good-code") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({
+          access_token: "mock-access-token",
+          refresh_token: "mock-refresh-token",
+          token_type: "Bearer",
+          expires_in: 1
+        }));
       } else {
         res.writeHead(400, { "Content-Type": "application/json" });
         res.end(JSON.stringify({ error: "invalid_grant" }));
@@ -73,6 +86,8 @@ config:
   api:
     "GET /me":
       command: aux4 whoami
+    "GET /credential":
+      command: aux4 credential
     "GET /open":
       command: aux4 open-endpoint
       public: true
@@ -106,6 +121,22 @@ config:
           ],
           "help": {
             "text": "Public endpoint"
+          }
+        },
+        {
+          "name": "credential",
+          "execute": [
+            "log:token=${accessToken}"
+          ],
+          "help": {
+            "text": "Return the request-local access token",
+            "variables": [
+              {
+                "name": "accessToken",
+                "text": "Access token injected for this invocation",
+                "env": "AUX4_ACCESS_TOKEN"
+              }
+            ]
           }
         }
       ]
@@ -187,6 +218,31 @@ rm -f cookies.txt
 curl -s -c cookies.txt -o /dev/null "http://localhost:18999/auth/signin"
 STATE=$(curl -s -c cookies.txt -o /dev/null -D - "http://localhost:18999/auth/signin" | grep -i "^location:" | sed -E 's/.*state=([^&]+).*/\1/' | tr -d "\r")
 curl -s -b cookies.txt -c cookies.txt -o /dev/null "http://localhost:18999/auth/callback?code=good-code&state=${STATE}"
+curl -s -b cookies.txt "http://localhost:18999/api/me"
+```
+
+```expect:partial
+user=alice@example.com
+```
+
+### should refresh an expiring access token and inject it only into the route invocation
+
+```execute
+rm -f cookies.txt
+curl -s -c cookies.txt -o /dev/null "http://localhost:18999/auth/signin"
+STATE=$(curl -s -c cookies.txt -o /dev/null -D - "http://localhost:18999/auth/signin" | grep -i "^location:" | sed -E 's/.*state=([^&]+).*/\1/' | tr -d "\r")
+curl -s -b cookies.txt -c cookies.txt -o /dev/null "http://localhost:18999/auth/callback?code=good-code&state=${STATE}"
+curl -s -D /tmp/aux4-api-refresh-headers.txt -b cookies.txt -c cookies.txt "http://localhost:18999/api/credential"
+grep -qi '^set-cookie: auth_token=' /tmp/aux4-api-refresh-headers.txt
+```
+
+```expect:partial
+token=mock-refreshed-access-token
+```
+
+### should keep OAuth credentials out of the command principal
+
+```execute
 curl -s -b cookies.txt "http://localhost:18999/api/me"
 ```
 

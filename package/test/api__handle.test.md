@@ -25,6 +25,8 @@ config:
       command: aux4 apitest configprobe
     "GET /whoami":
       command: aux4 apitest whoami
+    "GET /credential":
+      command: aux4 apitest credential
   greeting:
     message: hello-from-config
 ```
@@ -126,6 +128,23 @@ config:
                 "name": "principal",
                 "text": "Authenticated principal JSON injected by the proxy layer",
                 "default": "{}"
+              }
+            ]
+          }
+        },
+        {
+          "name": "credential",
+          "execute": [
+            "printf '{\"statusCode\":200,\"headers\":{\"Content-Type\":\"application/json\"},\"body\":\"%s\"}' value(accessToken)"
+          ],
+          "help": {
+            "text": "Echoes the request-local access token",
+            "variables": [
+              {
+                "name": "accessToken",
+                "text": "Validated token exposed only to this command invocation",
+                "default": "",
+                "env": "AUX4_ACCESS_TOKEN"
               }
             ]
           }
@@ -337,6 +356,40 @@ echo '{"httpMethod":"GET","path":"/whoami","headers":{},"body":null,"isBase64Enc
     "content-type": "application/json"
   },
   "body": "user-abc-123",
+  "isBase64Encoded": false
+}
+```
+
+### should inject the edge-validated bearer token into only that command invocation
+
+```execute
+echo '{"httpMethod":"GET","path":"/credential","headers":{"authorization":"Bearer request-user-token"},"body":null,"isBase64Encoded":false,"requestContext":{"requestId":"r11","identity":{"sourceIp":"1.2.3.4"},"authorizer":{"sub":"user-abc-123"}}}' | aux4 api handle --configFile config.yaml
+```
+
+```expect:json
+{
+  "statusCode": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "request-user-token",
+  "isBase64Encoded": false
+}
+```
+
+### should not leak a prior request's bearer token into the next command
+
+```execute
+echo '{"httpMethod":"GET","path":"/credential","headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"requestId":"r12","identity":{"sourceIp":"1.2.3.4"},"authorizer":{"sub":"other-user"}}}' | aux4 api handle --configFile config.yaml
+```
+
+```expect:json
+{
+  "statusCode": 200,
+  "headers": {
+    "content-type": "application/json"
+  },
+  "body": "",
   "isBase64Encoded": false
 }
 ```

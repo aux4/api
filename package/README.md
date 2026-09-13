@@ -2,6 +2,15 @@
 
 A Fastify-based HTTP server that bridges web requests to CLI commands using an AWS API Gateway-compatible request/response format. Supports REST APIs, WebSocket connections, convention-based Handlebars views, and static file serving.
 
+Authenticated browser sessions keep OAuth refresh material in an encrypted,
+HttpOnly cookie. Route commands receive only a request-local
+`AUX4_ACCESS_TOKEN`; identity page scope and command flags never contain tokens.
+
+In Cloud VM images, the warm Lambda loop also accepts trusted
+`aux4.execution.v1` events. These carry an opaque execution id and a structured
+command array. The runtime retrieves a short-lived token from the Cloud control
+plane using the VM's own identity, then executes the command without a shell.
+
 ## Installation
 
 ```bash
@@ -357,7 +366,7 @@ config:
 | `bearer` | Reads token from `Authorization: Bearer <token>` header |
 | `apiKey` | Static API key comparison (no command needed) |
 | `both` | Cookie first, bearer fallback (default) |
-| `oauth` | Full OAuth2/OIDC web-login flow with a signed session cookie |
+| `oauth` | Full OAuth2/OIDC web-login flow with an encrypted session cookie |
 
 ### Cookie Auth
 
@@ -427,18 +436,25 @@ security:
 
 Reads from `Authorization: Bearer <token>` header.
 
+After the bearer token is validated, it is also exposed to that route command as
+`AUX4_ACCESS_TOKEN`. The value is request-local: it is not added to the API
+server's process environment or to the command's `--principal` argument. The
+same behavior applies when API Gateway has already validated the bearer token
+and supplied an authorizer principal.
+
 ### OAuth Web Login
 
-`type: oauth` enables a full server-side OAuth2/OIDC login flow. The API handles the browser redirect dance, exchanges the authorization code through the `aux4 oauth` commands, and issues its own signed session cookie. Per-request authentication then verifies that session cookie in-process (no subprocess) and injects the principal into route commands. Works with any OAuth2/OIDC provider.
+`type: oauth` enables a full server-side OAuth2/OIDC login flow. The API handles the browser redirect dance, exchanges the authorization code through the `aux4 oauth` commands, and issues an opaque encrypted session cookie. Per-request authentication opens that session in-process, injects only the identity principal as command arguments, and provides the current access token to that invocation as `AUX4_ACCESS_TOKEN`. Works with any OAuth2/OIDC provider.
 
 ```yaml
 security:
   auth:
     type: oauth
     session:
-      secret: "secret://session-secret"   # HMAC secret for the session JWT
+      secret: "secret://session-secret"   # key material for the encrypted session
       cookie: auth_token                   # session cookie name (default: auth_token)
       ttl: 86400                           # session lifetime in seconds (default: 86400)
+      refreshSkew: 60                      # refresh this many seconds before token expiry
     redirectAfterLogin: /                  # where to send the user after a successful login
     redirectOnError: /login                # where to send the user on login failure / 401 (optional)
     providers:
@@ -459,14 +475,16 @@ When `type: oauth` is set, the API auto-wires three routes:
 | Route | Behavior |
 |-------|----------|
 | `GET /auth/signin?provider=<name>` | Builds the provider authorize URL (PKCE S256), stashes `{codeVerifier, state, provider}` in a short-lived signed httpOnly cookie, and `302`s to the provider. `provider` defaults to the sole configured provider when omitted. |
-| `GET /auth/callback?code&state` | Reads and clears the temp cookie, verifies `state`, exchanges the code for a principal, mints an HS256 session JWT (claims = principal + `exp`), sets it as the session cookie, and redirects to `redirectAfterLogin`. On any failure it redirects to `redirectOnError`. |
+| `GET /auth/callback?code&state` | Reads and clears the temp cookie, verifies `state`, exchanges the code for identity and tokens, seals them in an AES-256-GCM session cookie, and redirects to `redirectAfterLogin`. On any failure it redirects to `redirectOnError`. |
 | `GET /auth/logout` | Clears the session cookie and redirects (defaults to `redirectOnError`; override with `?redirect=/path`). |
 
-The PKCE state lives entirely in a signed, short-lived cookie — there is no server-side session store. The session cookie is an HS256 JWT signed and verified with `session.secret` using node's built-in crypto (no JWT library dependency). On every protected request the JWT signature and expiry are checked in-process, and the decoded claims are injected as `--principal` (accessible via `${principal.email}`, `${principal.sub}`, etc.). Missing, invalid, or expired session cookies return `401` (browsers are redirected to `redirectOnError`).
+The PKCE state lives entirely in a signed, short-lived cookie — there is no server-side session store. The application session is an AES-256-GCM envelope protected with `session.secret` using Node's built-in crypto. Identity claims are injected as `--principal` (accessible via `${principal.email}`, `${principal.sub}`, etc.); OAuth credentials are never added to the principal. Existing identity-only HS256 sessions remain accepted until their original TTL expires.
 
-Cookies are `httpOnly` with `SameSite=Lax`, and gain the `Secure` flag in production mode. The provider's `clientSecret` and access tokens are never logged or stored in the session.
+When an access token reaches `refreshSkew`, the API uses `aux4 oauth refresh` server-side and rotates the encrypted cookie. If refresh fails, the still-valid token is used until its actual expiry; an expired token returns `401`. The access token is supplied only to the current route process as `AUX4_ACCESS_TOKEN`, including commands served by the warm aux4 daemon. It is not written to page scope or the principal.
 
-**Requires** the `aux4/oauth` package to be installed (it provides `aux4 oauth authorize-url` and `aux4 oauth exchange`).
+Cookies are `httpOnly` with `SameSite=Lax`, and gain the `Secure` flag in production mode. The provider's `clientSecret` remains server-side. Providers must issue a refresh token (often by requesting an offline-access scope) for sessions to survive access-token expiry.
+
+**Requires** the `aux4/oauth` package to be installed (it provides `aux4 oauth authorize-url`, `aux4 oauth exchange`, and `aux4 oauth refresh`).
 
 ## Convention-Based Views
 
