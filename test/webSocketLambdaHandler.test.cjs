@@ -1,6 +1,8 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const http = require("node:http");
 const {
+  GatewayConnectionSender,
   WebSocketLambdaHandler,
   isWebSocketEvent,
   managementEndpoint,
@@ -83,6 +85,49 @@ test("builds management endpoints for execute-api and custom domains", () => {
     })),
     "https://socket.example.com"
   );
+});
+
+test("signs and posts a callback through the API Gateway Management API client", async t => {
+  const originalEnv = { ...process.env };
+  t.after(() => { process.env = originalEnv; });
+  process.env.AWS_ACCESS_KEY_ID = "test-access-key";
+  process.env.AWS_SECRET_ACCESS_KEY = "test-secret-key";
+  process.env.AWS_SESSION_TOKEN = "test-session-token";
+  process.env.AWS_REGION = "us-east-1";
+  delete process.env.AWS_PROFILE;
+  delete process.env.AWS_DEFAULT_PROFILE;
+
+  let received;
+  const server = http.createServer((request, response) => {
+    const chunks = [];
+    request.on("data", chunk => chunks.push(chunk));
+    request.on("end", () => {
+      received = {
+        method: request.method,
+        path: decodeURIComponent(request.url),
+        authorization: request.headers.authorization,
+        securityToken: request.headers["x-amz-security-token"],
+        body: Buffer.concat(chunks).toString("utf8")
+      };
+      response.statusCode = 200;
+      response.end();
+    });
+  });
+  await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+  t.after(() => new Promise(resolve => server.close(resolve)));
+
+  const sender = new GatewayConnectionSender();
+  await sender.send(
+    event("sendMessage"),
+    "hello from Lambda",
+    `http://127.0.0.1:${server.address().port}`
+  );
+
+  assert.equal(received.method, "POST");
+  assert.equal(received.path, "/@connections/connection-1");
+  assert.match(received.authorization, /^AWS4-HMAC-SHA256 Credential=test-access-key\//);
+  assert.equal(received.securityToken, "test-session-token");
+  assert.equal(received.body, "hello from Lambda");
 });
 
 test("dispatches $connect with the gateway authorizer context", async () => {
