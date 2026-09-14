@@ -21,6 +21,13 @@ This is the one-event-per-invocation entrypoint the AWS Lambda runtime calls whe
 - **Response contract** — a command that prints JSON with a `statusCode` produces that gateway response verbatim (headers/body/base64 honored); a command that prints plain JSON is wrapped as `200 application/json`; binary/`data:` output is base64-encoded with `isBase64Encoded: true`. `Set-Cookie` from `setCookie`/`clearCookie` routes is emitted (multiple cookies via `multiValueHeaders`).
 - **Base64 request bodies** — if the event has `isBase64Encoded: true`, the body is decoded before routing.
 - **Components** — if `config.components` is present, component routes are merged under their mount paths exactly as the running server does.
+- **Trusted package handlers** — a route with `handler` loads the configured
+  package-relative JavaScript module once per warm package/configuration
+  identity and passes normalized request, principal, trace, and abort context.
+  It returns `{ exitCode, stdout, stderr }`, so proxy response behavior is
+  identical to a command route. `command` can remain as an older-runtime
+  fallback. Module selection comes only from trusted configuration; absolute,
+  cross-package, symlink-escaped, and request-selected paths are rejected.
 
 ##### CORS
 

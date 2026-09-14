@@ -80,6 +80,13 @@ config:
     auth:
       type: cookie
       command: aux4 auth validate
+      # Optional trusted warm validator; when present it replaces command above.
+      handler:
+        package: myscope/auth
+        module: lib/api-auth.mjs
+        factory: createApiAuth
+        method: handle
+        identity: myscope-auth-v1
       cookie: auth_token
       redirect: /auth/signin
     rateLimit:
@@ -97,6 +104,16 @@ config:
   api:
     "GET /contacts":
       command: aux4 contacts list
+      # Optional trusted warm handler; command remains a compatibility fallback
+      # for aux4/api versions that predate in-process handlers.
+      handler:
+        package: myscope/contacts
+        module: lib/api-handler.mjs
+        factory: createApiHandler
+        method: handle
+        identity: contacts-api-v1
+        options:
+          mode: list
     "POST /contacts":
       command: aux4 contacts create
       redirect: /contacts
@@ -161,6 +178,72 @@ Use `value()` for safe shell quoting: `value(params.id)`, `value(body)`.
 
 The full AWS API Gateway-style event is also piped to the command via stdin for backward compatibility.
 
+### Trusted In-Process Handlers
+
+Latency-sensitive routes can load a JavaScript handler directly from an
+installed aux4 package. This is an opt-in package contract: ordinary `command`
+routes are unchanged. When both `handler` and `command` are present, a runtime
+that supports handlers uses `handler`; retaining `command` provides a fallback
+for older runtime versions.
+
+```yaml
+config:
+  api:
+    "POST /v1/messages":
+      command: aux4 messages create
+      timeout: 30000
+      handler:
+        package: myscope/messages
+        module: lib/api-handler.mjs
+        factory: createApiHandler
+        method: handle
+        identity: messages-api-v1
+        options:
+          format: json
+```
+
+The module path is relative to the installed package root. The runtime verifies
+that the package manifest matches `package` and that the resolved module remains
+inside that package, including after resolving symlinks. Absolute paths and
+request-provided module names are rejected. Only deployment-controlled
+configuration can select executable code.
+
+The configured factory is called once per package and configuration identity in
+a warm server or Lambda container. It receives frozen trusted `options` and
+identity metadata, then returns an object exposing the configured method
+(`handle` by default). The method receives a frozen context containing:
+
+- `request` plus top-level aliases for `method`, `path`, `headers`, `cookies`,
+  `query`, `params`, and the parsed `body`;
+- the authenticated `principal`;
+- a request-local `auth.accessToken` when authentication produced a delegated
+  token (kept separate from the principal, matching `AUX4_ACCESS_TOKEN` for
+  command routes);
+- `trace.id`, normalized to a safe 32-character correlation id;
+- the API Gateway-compatible `event`;
+- the trusted handler `options`; and
+- an abort `signal` that fires when the route timeout expires.
+
+The method returns the same command-result envelope used internally by command
+routes: `{ exitCode, stdout, stderr }`. `stdout` is processed by the existing
+response rules below, including API Gateway proxy JSON, ordinary JSON, text, and
+data URIs. Strictly matched timing records in `stderr` retain their existing
+relay behavior. Invalid envelopes fail closed.
+
+Handlers share `server.maxConcurrency` and `server.maxQueue` with command
+routes. If a handler times out, the client receives 503 and its concurrency slot
+is retained until the operation settles; cancellation-aware handlers should stop
+when `signal` aborts. Changing the trusted configuration identity retires the
+old runtime and calls its optional `dispose()` or `clear()` hook after active
+calls finish.
+
+Bearer and cookie command authentication can use the same contract through
+`security.auth.handler`. It receives the normalized request context and must
+return exit code 0 with a JSON principal on `stdout`; non-zero exit denies the
+request. Existing authentication caching and access-token propagation remain
+unchanged. OAuth session verification is already in-process; token refresh keeps
+using the OAuth package command only when required.
+
 ### Request Body & Content-Types
 
 The server accepts a request body for **any** content-type and delivers it to the command — it never rejects a request at the content-type layer. This makes it a faithful HTTP -> CLI bridge, so a mounted command sees every request regardless of how the client framed it.
@@ -190,6 +273,13 @@ The server accepts a request body for **any** content-type and delivers it to th
 ```yaml
 "GET /endpoint":
   command: aux4 my-command
+  handler:                   # optional trusted installed-package handler
+    package: myscope/package
+    module: lib/api-handler.mjs
+    factory: createApiHandler
+    method: handle
+    identity: package-api-v1
+    options: {}
   public: true              # skip authentication
   timeout: 60000            # override default timeout
   stream: true              # enable SSE streaming

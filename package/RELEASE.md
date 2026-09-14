@@ -1,3 +1,20 @@
+# aux4/api 2.0.34
+
+## Added
+
+- Trusted `handler` configuration for latency-sensitive REST routes and
+  bearer/cookie authentication validators. Package-relative modules are
+  identity-checked, cached across warm requests, retired on configuration
+  changes, bounded by the existing concurrency/timeout controls, and return the
+  same command-result envelope so proxy and stdout behavior stays compatible.
+
+## Security
+
+- Executable modules can be selected only by deployment configuration. Absolute
+  paths, package identity mismatches, directory traversal, and symlink escapes
+  are rejected before import. Timed-out handlers retain their concurrency slot
+  until they actually settle.
+
 # aux4/api 2.0.33
 
 ## Added

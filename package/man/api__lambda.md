@@ -26,6 +26,12 @@ Use this as the AWS Lambda entrypoint when deploying a multi-route aux4/api app 
 - **URL layout** — REST routes are served under `/api/`, static assets under `/static/`, and views at the root — identical to `api start`. Incoming event paths must include those prefixes (`/api/contacts`, `/static/logo.png`), because the full app matches the path verbatim (no implicit `/api` prepend).
 - **Event shape** — API Gateway **REST API (v1) / payload format 1.0**: `httpMethod`, `path`, flat `headers`, `queryStringParameters`, `body`, `isBase64Encoded`, `requestContext.identity.sourceIp`.
 - **Warm reuse** — the Fastify app is built **once** per container and cached, then reused across invocations (no per-request rebuild). This is the key difference from `api handle`, which routes in-process per event.
+- **Warm package handlers** — trusted REST route and bearer/cookie validator
+  modules are loaded from an installed package and cached by package and
+  configuration identity. They share command concurrency/timeout limits and
+  return the same `{ exitCode, stdout, stderr }` envelope, preserving response
+  and timing-relay semantics. Module paths are package-relative and cannot come
+  from request data.
 - **Response contract** — same as `api start`: a command that emits JSON with a `statusCode` produces that gateway response; plain JSON is wrapped as `200 application/json`; a `data:<mime>;base64,...` (or otherwise binary) response is returned with `isBase64Encoded: true` and its `Content-Disposition` preserved so a file download survives API Gateway.
 - **Binary downloads** — because binary responses come back base64-encoded, the API Gateway must set `binaryMediaTypes = ["*/*"]` so it decodes the base64 back to bytes for the client. The base64 decision is made from the response `Content-Type`: text-ish types (`text/*`, `application/json|javascript|xml`, `image/svg`) pass through as UTF-8; everything else is treated as binary.
 - **WebSocket event shape** — API Gateway WebSocket v2 events include
@@ -85,6 +91,11 @@ One `config.ws` entry is selected automatically. With multiple entries, set the
 WebSocket stage variable `AUX4_WS_PATH` to the desired path. The default callback
 URL comes from `requestContext.domainName` and `stage`; custom domains omit the
 stage. `managementEndpoint` can override the callback URL when necessary.
+
+The in-process route contract does not replace WebSocket transport behavior.
+Fastify continues to own Upgrade sockets under `api start`; API Gateway sends
+discrete WebSocket events to Lambda, where configured `config.ws` commands run
+without booting Fastify.
 
 ##### Limitations
 

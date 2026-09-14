@@ -1,0 +1,5 @@
+{
+  "scope": "test",
+  "name": "in-process-package",
+  "version": "1.0.0"
+}

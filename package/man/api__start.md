@@ -17,6 +17,8 @@ The server supports:
 - **Form URL-encoded** body parsing
 - **HTTPS/TLS** support via key and cert file paths
 - **Security** features: API key authentication, rate limiting, security headers (Helmet), and IP allowlist
+- **Trusted in-process package handlers** for latency-sensitive REST routes and
+  bearer/cookie validators, sharing the command concurrency and timeout limits
 
 #### Usage
 
@@ -46,6 +48,12 @@ config:
   api:
     "GET /say":
       command: aux4 say
+      handler:
+        package: myscope/say
+        module: lib/api-handler.mjs
+        factory: createApiHandler
+        method: handle
+        identity: say-api-v1
     "POST /users/{id}":
       command: aux4 update-user
   ws:
@@ -103,9 +111,23 @@ config:
 
 Limits concurrent child processes to prevent resource exhaustion. Configurable via `server.maxConcurrency` (default: 50) and `server.maxQueue` (default: 200). Returns 503 when the queue is full.
 
+Trusted in-process handlers use the same limits. Configure `handler.package` as
+an installed `scope/name`, `handler.module` as a package-relative module,
+`handler.factory` as the exported factory (`createHandler` by default), and
+`handler.method` as the returned runtime method (`handle` by default). The
+factory is cached for the warm server's package/configuration identity. The
+handler must return `{ exitCode, stdout, stderr }`; stdout follows the same
+response rules as a command. Absolute, cross-package, symlink-escaped, or
+request-selected modules are rejected. Changing trusted configuration retires
+the old runtime after active calls finish.
+
 #### Timeout
 
 Commands time out after 30 seconds by default. Set `server.timeout` for global override or `timeout` on individual routes.
+
+In-process handlers receive an abort signal on timeout. Their concurrency slot
+remains occupied until the operation actually settles, preventing a handler that
+ignores cancellation from exceeding the configured limit.
 
 #### SSE Streaming
 
