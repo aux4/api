@@ -6,7 +6,8 @@ module.exports = {
   input: 'index.js',
   output: {
     file: 'package/lib/server.js',
-    format: 'cjs'
+    format: 'cjs',
+    inlineDynamicImports: true
   },
   plugins: [
     json(),

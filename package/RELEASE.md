@@ -1,3 +1,21 @@
+# aux4/api 2.0.33
+
+## Added
+
+- Lambda entrypoints now dispatch API Gateway WebSocket v2 `$connect`,
+  `$disconnect`, `$default`, and custom route events directly to `config.ws`
+  commands. Message output can be delivered through the signed API Gateway
+  Management API or returned for a configured route response.
+- WebSocket `$connect` accepts API Gateway authorizer context or the existing
+  aux4 application authentication configuration, forwarding the validated
+  principal and request-local access token to the command.
+
+## Changed
+
+- Lambda transport handlers initialize lazily. WebSocket and structured
+  execution events no longer boot Fastify, while REST events keep the existing
+  cached full-app adapter.
+
 # aux4/api 2.0.32
 
 ## Changed

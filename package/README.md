@@ -1,6 +1,9 @@
-# Aux4 API Server
+# aux4/api
 
-A Fastify-based HTTP server that bridges web requests to CLI commands using an AWS API Gateway-compatible request/response format. Supports REST APIs, WebSocket connections, convention-based Handlebars views, and static file serving.
+An HTTP and Lambda event runtime that bridges requests to aux4 commands. The
+persistent server uses Fastify for REST, WebSocket upgrades, views, and static
+files; the Lambda entrypoint supports REST proxy and API Gateway WebSocket v2
+events.
 
 Authenticated browser sessions keep OAuth refresh material in an encrypted,
 HttpOnly cookie. Route commands receive only a request-local
@@ -102,6 +105,7 @@ config:
       redirect: /contacts
   ws:
     "/chat":
+      responseMode: management
       routes:
         $connect: aux4 chat-connect
         $disconnect: aux4 chat-disconnect
@@ -320,7 +324,12 @@ echo '{ "httpMethod": "GET", "path": "/static/logo.png", "headers": {}, "body": 
 - **Static files and downloads work** — a `data:<mime>;base64,...` (or otherwise binary) response is returned with `isBase64Encoded: true` so the file survives API Gateway intact. Pair the gateway with `binaryMediaTypes = ["*/*"]` so it decodes the base64 back to bytes on the way out.
 - **Warm reuse** — the app is built once per container and reused across invocations (no per-request rebuild), unlike `api handle`.
 
-**Note:** WebSocket routes, SSE streaming (`stream: true`), and multipart **uploads** need a live socket and are not available through `api lambda` either — use `aux4 api start` for those. Use `api handle` when you only need REST routing with the smallest cold start; use `api lambda` when the app also serves static files or downloads.
+`api lambda` also accepts API Gateway WebSocket v2 events. Those events are
+dispatched directly to `config.ws`; they do not run through Fastify because API
+Gateway owns the persistent connection. SSE streaming (`stream: true`) and
+multipart **uploads** still need a live HTTP server and are not available through
+`api lambda`. Use `api handle` when you only need REST routing with the smallest
+cold start; use `api lambda` for the full REST app or WebSocket v2 events.
 
 ## CORS
 
@@ -821,6 +830,50 @@ WebSocket routes are defined in `config.ws`. Each path maps lifecycle events and
 - `$disconnect` — fired when a client disconnects
 - `$default` — fired when no matching action is found
 - `<action>` — custom action matched from `{ "action": "<action>" }` in the message body
+
+`aux4 api start` uses `@fastify/websocket` because the local process owns the
+HTTP Upgrade and socket. `aux4 api lambda` handles API Gateway WebSocket v2
+events directly instead. API Gateway supplies `requestContext.routeKey`,
+`connectionId`, `domainName`, and `stage`; the full event is piped to the route
+command.
+
+For Lambda, a single `config.ws` entry is selected automatically. If a VM exposes
+more than one entry, set the WebSocket API stage variable `AUX4_WS_PATH` to the
+matching path, such as `/chat`.
+
+By default, non-empty message command output is sent back with the API Gateway
+Management API. The Lambda role therefore needs `execute-api:ManageConnections`
+for its WebSocket API. `requestContext.domainName` and `stage` are used to build
+the callback endpoint; for a custom domain, the stage is omitted. Set
+`managementEndpoint` on the WebSocket entry only when an explicit callback URL
+is required.
+
+To use an API Gateway route response instead, set `responseMode: route` and
+enable the corresponding route response in API Gateway. Set `responseMode: none`
+when the command sends its own asynchronous messages. `$connect` and
+`$disconnect` always return their command response to API Gateway and never call
+the Management API.
+
+```yaml
+config:
+  ws:
+    "/chat":
+      responseMode: management # management (default), route, or none
+      routes:
+        $connect: aux4 chat connect
+        $disconnect: aux4 chat disconnect
+        $default: aux4 chat message
+        sendMessage: aux4 chat send
+```
+
+Attach authentication to API Gateway's `$connect` route. Its authorizer context
+is forwarded as `requestContext.authorizer`. When the gateway does not provide an
+authorizer principal, the existing `security.auth` configuration is evaluated on
+`$connect`; a validated principal is added to the command event and its access
+token is available only in that command's environment. API Gateway authorizers
+run only at connection time, so applications that need identity on later message
+events should persist the connection-to-principal mapping in their `$connect`
+command and remove it in `$disconnect`.
 
 ### Management API
 

@@ -6,7 +6,9 @@ The server supports:
 
 - **REST API** endpoints that map HTTP routes to commands (event piped via stdin, response via stdout)
 - **Wildcard methods and catch-all paths** — `ANY` (or `*`) matches every HTTP method; `{path...}` greedily captures the rest of the path
-- **WebSocket** connections following AWS API Gateway WebSocket patterns
+- **WebSocket** connections following AWS API Gateway event shapes. In this
+  persistent-server mode, `@fastify/websocket` owns the HTTP Upgrade and socket;
+  API Gateway WebSocket Lambda events use `aux4 api lambda` instead.
 - **Convention-based views** using Handlebars templates from the `views/` directory
 - **Static file serving** from the `static/` directory
 - **File uploads** with configurable limits

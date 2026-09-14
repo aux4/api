@@ -14,6 +14,14 @@ config:
       command: aux4 apitest update-user
     "GET /download":
       command: aux4 apitest download
+  ws:
+    "/chat":
+      responseMode: route
+      routes:
+        $connect: aux4 apitest ws-connect
+        $disconnect: aux4 apitest ws-disconnect
+        $default: aux4 apitest ws-default
+        sendMessage: aux4 apitest ws-message
 ```
 
 ```file:.aux4
@@ -61,6 +69,42 @@ config:
           ],
           "help": {
             "text": "Return a binary file download"
+          }
+        },
+        {
+          "name": "ws-connect",
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, body: (.requestContext.authorizer.principalId // \"connected\")}'"
+          ],
+          "help": {
+            "text": "Accept a WebSocket connection"
+          }
+        },
+        {
+          "name": "ws-disconnect",
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, body: \"disconnected\"}'"
+          ],
+          "help": {
+            "text": "Close a WebSocket connection"
+          }
+        },
+        {
+          "name": "ws-default",
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, body: (\"default:\" + .body)}'"
+          ],
+          "help": {
+            "text": "Handle an unmatched WebSocket message"
+          }
+        },
+        {
+          "name": "ws-message",
+          "execute": [
+            "stdin:jq -rc '{statusCode: 200, body: (\"message:\" + .requestContext.connectionId)}'"
+          ],
+          "help": {
+            "text": "Handle a routed WebSocket message"
           }
         }
       ]
@@ -162,4 +206,46 @@ echo '{"httpMethod":"GET","path":"/api/download","headers":{},"body":null,"isBas
 
 ```expect:partial
 report.bin
+```
+
+## API Gateway WebSocket v2
+
+### should dispatch $connect and preserve the authorizer context
+
+```execute
+echo '{"requestContext":{"routeKey":"$connect","eventType":"CONNECT","connectionId":"conn-1","requestId":"req-1","domainName":"abc123.execute-api.us-east-1.amazonaws.com","stage":"dev","identity":{"sourceIp":"1.2.3.4"},"authorizer":{"principalId":"user-123"}},"headers":{},"queryStringParameters":null,"isBase64Encoded":false}' | aux4 api lambda --configFile config.yaml
+```
+
+```expect:partial
+"statusCode":200*"body":"user-123"
+```
+
+### should dispatch the API Gateway custom route key
+
+```execute
+echo '{"requestContext":{"routeKey":"sendMessage","eventType":"MESSAGE","connectionId":"conn-1","requestId":"req-2","domainName":"abc123.execute-api.us-east-1.amazonaws.com","stage":"dev","identity":{"sourceIp":"1.2.3.4"}},"headers":{},"body":"{\"action\":\"sendMessage\"}","isBase64Encoded":false}' | aux4 api lambda --configFile config.yaml
+```
+
+```expect:partial
+"statusCode":200*"body":"message:conn-1"
+```
+
+### should use body action routing when API Gateway invokes $default
+
+```execute
+echo '{"requestContext":{"routeKey":"$default","eventType":"MESSAGE","connectionId":"conn-1","requestId":"req-3","domainName":"abc123.execute-api.us-east-1.amazonaws.com","stage":"dev","identity":{"sourceIp":"1.2.3.4"}},"headers":{},"body":"{\"action\":\"sendMessage\"}","isBase64Encoded":false}' | aux4 api lambda --configFile config.yaml
+```
+
+```expect:partial
+"statusCode":200*"body":"message:conn-1"
+```
+
+### should dispatch $disconnect without trying to reply on the closed connection
+
+```execute
+echo '{"requestContext":{"routeKey":"$disconnect","eventType":"DISCONNECT","connectionId":"conn-1","requestId":"req-4","domainName":"abc123.execute-api.us-east-1.amazonaws.com","stage":"dev","identity":{"sourceIp":"1.2.3.4"}},"headers":{},"isBase64Encoded":false}' | aux4 api lambda --configFile config.yaml
+```
+
+```expect:partial
+"statusCode":200*"body":"disconnected"
 ```
