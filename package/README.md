@@ -421,6 +421,28 @@ multipart **uploads** still need a live HTTP server and are not available throug
 `api lambda`. Use `api handle` when you only need REST routing with the smallest
 cold start; use `api lambda` for the full REST app or WebSocket v2 events.
 
+### Warm Runtime Loop (`api lambda-loop`)
+
+`api lambda-loop` builds the full Fastify app **once** and then owns the AWS Lambda runtime API loop itself, reusing the warm app across every invocation instead of respawning a process per event. It is the runtime a container image runs as its entrypoint; it reads events from the Lambda runtime API rather than stdin.
+
+Because a warm container reuses its filesystem across invocations — and several warm siblings each hold their own copy of the app's local state (e.g. a per-app SQLite store) — the loop synchronizes state around each request so a warm sibling never serves stale data:
+
+- **Pre-invoke pull (stateful actions only)** — before handling a request whose route path contains the `/action/` segment, the loop pulls fresh state. Static assets, the SPA shell, `/api/me`, and health checks are **not** gated, so page latency is unaffected. Back-to-back actions are coalesced by a short in-process TTL.
+- **Post-invoke push** — after the response is posted (off the response path), the loop pushes state so a write persists for the next container.
+
+Both steps are **best-effort**: a failed pull or push is logged and never aborts the request. The state sync itself is provided by the surrounding image, wired through these environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `AUX4_LAMBDA_PRE_INVOKE_MODULE` | Path to an ES module exporting `pullFromEnv(env)`; imported in-process and called before a stateful action. |
+| `AUX4_LAMBDA_PRE_INVOKE` | Shell command run as a fallback when the module can't be imported or its pull fails. |
+| `AUX4_LAMBDA_PRE_INVOKE_TTL_MS` | Coalescing window for the pre-invoke pull, in milliseconds (default `2000`; `0` = pull before every action). |
+| `AUX4_LAMBDA_POST_INVOKE_MODULE` | Path to an ES module exporting `pushFromEnv(env)`; imported in-process and called after the response. |
+| `AUX4_LAMBDA_POST_INVOKE` | Shell command run as a fallback when the module can't be imported or its push fails. |
+| `AUX4_LAMBDA_MAX_INVOCATIONS` | Exit the loop after N handled invocations instead of running forever (default unset = run forever). Useful for a bounded drain or a test harness. |
+
+A route is classified as a stateful action purely by its normalized route path (the greedy `{proxy+}` capture, falling back to `event.path` / `event.rawPath`, with a leading `/`) containing the `/action/` segment.
+
 ## CORS
 
 `config.cors` configures Cross-Origin Resource Sharing and applies to **both** `api start` and `api handle`. On `api start` the headers are applied by `@fastify/cors`; on `api handle` (which never runs Fastify) the same headers are computed in-process. When `config.cors` is absent or empty, no `Access-Control-*` headers are emitted.
