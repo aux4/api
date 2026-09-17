@@ -597,6 +597,7 @@ security:
       cookie: auth_token                   # session cookie name (default: auth_token)
       ttl: 86400                           # session lifetime in seconds (default: 86400)
       refreshSkew: 60                      # refresh this many seconds before token expiry
+      requireDelegation: true              # force re-auth when no delegated token is available (default: true)
     redirectAfterLogin: /                  # where to send the user after a successful login
     redirectOnError: /login                # where to send the user on login failure / 401 (optional)
     providers:
@@ -620,7 +621,9 @@ When `type: oauth` is set, the API auto-wires three routes:
 | `GET /auth/callback?code&state` | Reads and clears the temp cookie, verifies `state`, exchanges the code for identity and tokens, seals them in an AES-256-GCM session cookie, and redirects to `redirectAfterLogin`. On any failure it redirects to `redirectOnError`. |
 | `GET /auth/logout` | Clears the session cookie and redirects (defaults to `redirectOnError`; override with `?redirect=/path`). |
 
-The PKCE state lives entirely in a signed, short-lived cookie — there is no server-side session store. The application session is an AES-256-GCM envelope protected with `session.secret` using Node's built-in crypto. Identity claims are injected as `--principal` (accessible via `${principal.email}`, `${principal.sub}`, etc.); OAuth credentials are never added to the principal. Existing identity-only HS256 sessions remain accepted until their original TTL expires.
+The PKCE state lives entirely in a signed, short-lived cookie — there is no server-side session store. The application session is an AES-256-GCM envelope protected with `session.secret` using Node's built-in crypto. Identity claims are injected as `--principal` (accessible via `${principal.email}`, `${principal.sub}`, etc.); OAuth credentials are never added to the principal.
+
+An `type: oauth` session exists to delegate the signed-in user's access token to route commands. A session that cannot supply one — a legacy identity-only HS256 cookie minted before the sealed-envelope format, with no embedded OAuth credentials — would authenticate but leave `AUX4_ACCESS_TOKEN` unset, so a route command that needs the delegated token fails inside a subprocess with no visible signal. To prevent that silent degradation, such a session is instead forced to re-authenticate and receives `401 Authentication required` (a clean sign-in-again). Set `session.requireDelegation: false` to opt out for an oauth app whose routes genuinely need no delegated token; a legacy identity-only session is then accepted as before.
 
 When an access token reaches `refreshSkew`, the API uses `aux4 oauth refresh` server-side and rotates the encrypted cookie. If refresh fails, the still-valid token is used until its actual expiry; an expired token returns `401`. The access token is supplied only to the current route process as `AUX4_ACCESS_TOKEN`, including commands served by the warm aux4 daemon. It is not written to page scope or the principal.
 

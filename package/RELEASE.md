@@ -1,3 +1,26 @@
+# aux4/api 2.1.2
+
+Closes a silent-degradation gap in `type: oauth` session authentication.
+
+## Fixed
+
+- **Legacy session silently ran route commands without a delegated token** — a session
+  cookie minted before the sealed AES-GCM envelope format (2.1.x) authenticates through
+  the legacy identity-only JWT fallback, which carries no `__oauth` credentials. The
+  request still succeeded (principal resolved, no 401), but no `AUX4_ACCESS_TOKEN` was
+  injected, so route commands that delegate the signed-in user's token failed deep inside
+  a subprocess with no signal in the browser, the network tab, or logs. The session auth
+  path now treats "authenticated but no delegated token available" as a re-auth condition
+  and returns `401 Authentication required`, giving the user a clean sign-in-again
+  outcome instead of an opaque failure.
+
+## Added
+
+- **`security.auth.session.requireDelegation`** — defaults to `true` for `type: oauth`
+  (delegation is the purpose of an oauth session). Set it to `false` for an oauth app
+  whose routes genuinely need no delegated user token; a legacy identity-only session is
+  then accepted as before.
+
 # aux4/api 2.1.1
 
 Combines the OAuth-session user-token injection lineage (route-backed commands

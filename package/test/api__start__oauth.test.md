@@ -145,6 +145,30 @@ config:
 }
 ```
 
+```file:mint-legacy-cookie.js
+// Mint a pre-envelope legacy session cookie: a plain HS256 JWT signed with the
+// session secret carrying identity claims but NO __oauth delegated-token envelope.
+// This is exactly the cookie shape that authenticates through the legacy
+// SessionToken.verify fallback and cannot supply AUX4_ACCESS_TOKEN.
+const crypto = require("crypto");
+const SECRET = "test-session-secret-value";
+
+function b64url(input) {
+  return Buffer.from(input)
+    .toString("base64")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+}
+
+const now = Math.floor(Date.now() / 1000);
+const header = { alg: "HS256", typ: "JWT" };
+const claims = { sub: "user-42", email: "alice@example.com", name: "Alice", iat: now, exp: now + 3600 };
+const signingInput = b64url(JSON.stringify(header)) + "." + b64url(JSON.stringify(claims));
+const signature = b64url(crypto.createHmac("sha256", SECRET).update(signingInput).digest());
+process.stdout.write(signingInput + "." + signature);
+```
+
 ```beforeAll
 true
 ```
@@ -280,6 +304,36 @@ curl -s "http://localhost:18999/api/open"
 
 ```expect:partial
 open-ok
+```
+
+## legacy identity-only session
+
+A session cookie minted before the sealed AES-GCM envelope format (no `__oauth`
+delegated token) still authenticates via the legacy `SessionToken.verify` fallback,
+but it cannot supply `AUX4_ACCESS_TOKEN` to a route command. With delegation required
+(the default for `type: oauth`), such a session must be forced to re-authenticate
+instead of silently spawning a token-less command that fails inside a subprocess.
+
+### should force re-auth (401) for a legacy session on a delegation-requiring route
+
+```execute
+LEGACY=$(node mint-legacy-cookie.js)
+curl -s -o /dev/null -w "%{http_code}" --cookie "auth_token=${LEGACY}" "http://localhost:18999/api/me"
+```
+
+```expect
+401
+```
+
+### should force re-auth (401) for a legacy session on a token-consuming route
+
+```execute
+LEGACY=$(node mint-legacy-cookie.js)
+curl -s -o /dev/null -w "%{http_code}" --cookie "auth_token=${LEGACY}" "http://localhost:18999/api/credential"
+```
+
+```expect
+401
 ```
 
 ## logout
