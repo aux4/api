@@ -1,3 +1,21 @@
+# aux4/api 2.1.3
+
+Generic hardening against oversized command spawns (SFA-163).
+
+## Fixed
+
+- **`executeFile` could crash the runtime with a raw `spawn E2BIG`** — the structured
+  execution path (`Command.executeFile`, used by Step Functions tasks invoking their own
+  Cloud VM) built `execFile` argv directly from request params. When a single argument or
+  the combined argv+env block exceeded the Linux execve limits, `execFile` failed with an
+  uncaught `E2BIG` that escaped the Lambda as an opaque `{"errorMessage":"spawn E2BIG"}`
+  with no actionable context. `executeFile` now measures the argv+env size before
+  spawning and rejects an oversized command early with a clear message — *"Command is too
+  large to spawn … Pass large parameters via a file or stdin, not argv."* — and wraps the
+  synchronous `execFile` call in a `try/catch` so any synchronous spawn failure resolves
+  as a clean non-zero result instead of throwing. Limits: `MAX_ARG_STRLEN` 128 KiB per
+  argument, `MAX_ARGV_ENV_BYTES` 1 MiB total.
+
 # aux4/api 2.1.2
 
 Closes a silent-degradation gap in `type: oauth` session authentication.
