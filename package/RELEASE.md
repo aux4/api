@@ -1,3 +1,25 @@
+# Release notes
+
+## 2.1.4
+
+### Fix: a session could stop renewing its access token, permanently
+
+`refreshOAuth` stored `expiresAt: 0` whenever a token response carried no
+`expires_in`. Both `shouldRefresh` and `isExpired` tested `!!oauth.expiresAt`, so
+a falsy value meant the session was **never refreshed and never considered
+expired**. One refresh without an `expires_in` therefore disabled renewal for the
+remainder of the session, and a long-lived page kept presenting an access token
+that had died at the provider hours earlier.
+
+- Expiry is now resolved in order of reliability: the provider's `expires_in`,
+  then the `exp` claim if the token is a JWT (read WITHOUT verification — it only
+  schedules a refresh and grants nothing), then a short 5-minute window.
+- The unknown case can no longer be falsy, so the next request re-checks instead
+  of giving up. That is cheap and self-correcting: the refresh that follows
+  usually reports a real expiry.
+- `shouldRefresh` now treats an unknown expiry as "renew if a refresh token
+  exists" rather than "never renew".
+
 # aux4/api 2.1.3
 
 Generic hardening against oversized command spawns (SFA-163).
