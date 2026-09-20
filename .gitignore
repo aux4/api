@@ -3,3 +3,4 @@ package/lib/
 local-test/
 .DS_Store
 *.zip
+package/test/order.log
