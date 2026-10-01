@@ -468,6 +468,26 @@ Cookies are `httpOnly` with `SameSite=Lax`, and gain the `Secure` flag in produc
 
 **Requires** the `aux4/oauth` package to be installed (it provides `aux4 oauth authorize-url` and `aux4 oauth exchange`).
 
+### Page-Level Auth (Views + 404 Fallback)
+
+`security.auth`, once configured, protects the whole HTML surface — not just `/api/*`. The convention-based views (below) and the 404 SPA-shell fallback run through the same `AuthHandler` as REST routes:
+
+- Unauthenticated `GET` of a view route or an unmatched route both get a real `302` to the login page (`redirectOnError` for `type: oauth`, defaulting to `/auth/signin`; `security.auth.redirect` for the other auth types). This is a real HTTP redirect, not just a `401` body, so a browser navigating to a page lands on the sign-in screen.
+- `/api/*` is unaffected — it keeps returning JSON `401`/`403` exactly as before.
+- Always reachable without a session, regardless of `security.auth`: `/auth/*` (the OAuth login routes above), `/static/*`, `/media/*`, and the `aux4-component.js` loader/batch endpoints (`/aux4/*`).
+- Add more public paths (e.g. a custom login page, a public landing page, a health check) with `security.auth.publicPaths` — a list of path prefixes:
+
+```yaml
+security:
+  auth:
+    type: oauth
+    publicPaths:
+      - /health
+      - /pricing
+```
+
+- With no `security.auth` configured at all, every page stays public — this is unchanged from before.
+
 ## Convention-Based Views
 
 Handlebars templates in the `views/` directory are automatically registered as GET routes:
