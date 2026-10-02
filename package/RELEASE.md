@@ -1,5 +1,25 @@
 # Release notes
 
+## 2.1.5
+
+### Fix: HTML view routes and the 404 SPA-shell fallback were not gated by `security.auth`
+
+Forward-ported from `aux4/api@2.0.27` (branch `conductor/API-014`), which fixed
+this on top of an older `2.0.x` line that diverged from the `2.1.x` line this
+release continues — the fix was never present on `main`/`2.1.x` until now.
+
+`ViewHandler.register()` and the 404 SPA-shell fallback had no auth
+`preHandler` at all, so `GET /` and `GET /apps/<id>` returned `200`
+unauthenticated even when `security.auth` was configured (e.g. `aux4/platform`
+with `PLATFORM_OAUTH_CLIENT_ID` set) — only `/api/*` was actually gated. Added
+`PageAuthGuard`, a shared `preHandler` that runs the same
+`AuthHandler.authenticate` used by `RestHandler` against every page route and
+the 404 fallback, redirecting unauthenticated `GET` requests to the login page
+(`302`) instead of serving the page. `/auth/*`, `/static/*`, `/media/*`,
+`/aux4/*`, and configurable `security.auth.publicPaths` stay public. No
+`security.auth` configured -> unchanged (fully public), matching prior
+behavior.
+
 ## 2.1.4
 
 ### Fix: a session could stop renewing its access token, permanently
