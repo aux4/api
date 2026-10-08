@@ -35,6 +35,7 @@ async function main() {
       if (args[7] === 'true') config.production = true;
       if (args[8]) config.components = parse(args[8]);
       if (args[9]) config._configFile = args[9];
+      if (args[10]) config.sessions = parse(args[10]);
 
       if (args[0] === 'lambda-loop') {
         // Long-lived Lambda runtime loop: build the Fastify app ONCE and own the
@@ -201,6 +202,14 @@ async function main() {
         config.components = JSON.parse(args[9]);
       } catch (error) {
         config.components = args[9];
+      }
+    }
+
+    if (args[10]) {
+      try {
+        config.sessions = JSON.parse(args[10]);
+      } catch (error) {
+        config.sessions = args[10];
       }
     }
 
