@@ -1,5 +1,27 @@
 # Release notes
 
+## 2.1.8
+
+### Fix: `config.sessions` `/input` corrupted the stdin payload unless the client sent an unusual Content-Type
+
+The documented contract for `POST <path>/:id/input` is "forwarded byte-for-byte
+— no parsing, no content-type restriction". That held only for a Content-Type
+with no app-wide parser of its own (e.g. `application/octet-stream`). A client
+posting with the default (none sent, which Fastify treats as `text/plain`),
+`application/x-www-form-urlencoded`, or `application/json` — all three of
+which the server registers its own app-wide parser for — had its raw bytes
+parsed by that app-wide parser *before* reaching the session's stdin: a
+urlencoded body with no `=` parsed into a key/value object, which then
+stringified to the literal text `[object Object]`; a JSON body was parsed and
+re-stringified, silently normalizing (and rejecting invalid-JSON) payloads
+that were supposed to pass through untouched. Fixed by having the session
+routes' encapsulated Fastify context explicitly remove and replace the three
+inherited exact-match parsers (not just register a `"*"` catch-all, which
+Fastify only invokes when no exact-match parser exists anywhere in the
+inherited chain) with the same raw-buffer passthrough already used for every
+other Content-Type. `/input` now forwards the exact request body regardless
+of what Content-Type the client sends or omits.
+
 ## 2.1.7
 
 ### Added: generic session streaming (REST + WebSocket) for long-lived commands
