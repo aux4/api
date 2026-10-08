@@ -1,7 +1,7 @@
 {
   "scope": "aux4",
   "name": "api",
-  "version": "2.0.21",
+  "version": "2.1.0",
   "description": "aux4 API",
   "license": "Apache-2.0",
   "tags": [
@@ -40,7 +40,7 @@
         {
           "name": "start",
           "execute": [
-            "node ${packageDir}/lib/server.js start values(port, cors, api, ws, server, tls, security, production, components)"
+            "node ${packageDir}/lib/server.js start values(port, cors, api, ws, server, tls, security, production, components, sessions)"
           ],
           "help": {
             "text": "Start the aux4 API server",
@@ -89,6 +89,11 @@
               {
                 "name": "components",
                 "text": "Component configuration",
+                "default": ""
+              },
+              {
+                "name": "sessions",
+                "text": "Session streaming route configuration (long-lived command sessions over SSE/REST)",
                 "default": ""
               }
             ]

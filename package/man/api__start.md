@@ -12,6 +12,9 @@ The server supports:
 - **File uploads** with configurable limits
 - **Command timeout** with global and per-route configuration
 - **SSE streaming** for long-running commands via `stream: true`
+- **Session streaming** (`config.sessions`) — a long-lived command with a
+  create/input/end REST lifecycle and an SSE output stream, or the WebSocket
+  equivalent via `stream: true` on a `config.ws` route
 - **Form URL-encoded** body parsing
 - **HTTPS/TLS** support via key and cert file paths
 - **Security** features: API key authentication, rate limiting, security headers (Helmet), and IP allowlist
@@ -25,6 +28,7 @@ aux4 api start [--configFile <file>] [--config <config>] [--port <number>]
 --configFile  Path to configuration file (YAML or JSON)
 --config      Configuration profile name
 --port        Server port (default: 8080, env: AUX4_API_PORT)
+--sessions    Session streaming route configuration (normally set via config.yaml, not this flag directly)
 
 #### Example
 
@@ -107,7 +111,32 @@ Commands time out after 30 seconds by default. Set `server.timeout` for global o
 
 #### SSE Streaming
 
-Set `stream: true` on a route to stream command stdout as Server-Sent Events (`text/event-stream`).
+Set `stream: true` on a route to stream command stdout as Server-Sent Events (`text/event-stream`). This is one-shot: the command runs once per request with no channel for the client to send it input while it runs.
+
+#### Session Streaming
+
+`config.sessions` wires up a generic create/input/end/events lifecycle for a long-lived command, so a client can both feed it input over time and read its output as a stream — not possible with plain `stream: true`:
+
+```yaml
+config:
+  sessions:
+    "/transcribe":
+      command: aux4 whisper stream
+      idleTimeout: 60000
+      maxDuration: 1800000
+      maxPerPrincipal: 5
+      heartbeat: 15000
+      public: false
+```
+
+- `POST /api/transcribe` spawns `command` (through the same `security.auth` check as a `config.api` route) and returns `{"id": "..."}`. The session is bound to the caller's principal.
+- `POST /api/transcribe/:id/input` writes the raw request body to the command's stdin, byte-for-byte.
+- `POST /api/transcribe/:id/end` closes stdin (EOF).
+- `GET /api/transcribe/:id/events` streams stdout as SSE (`data: <line>`), with a `: heartbeat` comment every `heartbeat` ms and an `event: end` (preceded by `event: error` on a non-zero exit) when the command exits.
+
+A request to `/input`, `/end`, or `/events` for a session id owned by a different principal returns `404`, identical to a nonexistent session. `maxPerPrincipal` (default 5) caps concurrent sessions per principal across every `config.sessions` route and every WebSocket stream route together — exceeding it returns `429`. `idleTimeout` (default 60000ms) kills the command after that long with no stdin/stdout activity; `maxDuration` (default 1800000ms) kills it unconditionally once the session has run that long. Disconnecting `/events` also tears the command down immediately. Teardown always sends `SIGTERM` first, escalating to `SIGKILL` after 2 seconds if the process is still alive.
+
+The same `stream: true` + `command` shape works on a `config.ws` route instead of the lifecycle `routes` map: the whole WebSocket connection becomes one session, with every client frame written to stdin and every stdout line sent back as a text frame.
 
 #### Form URL-Encoded
 

@@ -76,6 +76,19 @@ config:
         $connect: aux4 chat-connect
         $disconnect: aux4 chat-disconnect
         $default: aux4 chat-message
+    "/transcribe":
+      stream: true
+      command: aux4 whisper stream
+      idleTimeout: 60000
+      maxDuration: 1800000
+      maxPerPrincipal: 5
+  sessions:
+    "/transcribe":
+      command: aux4 whisper stream
+      idleTimeout: 60000
+      maxDuration: 1800000
+      maxPerPrincipal: 5
+      heartbeat: 15000
 ```
 
 ## REST API
@@ -788,6 +801,34 @@ WebSocket routes are defined in `config.ws`. Each path maps lifecycle events and
 - `POST /@connections/:connectionId` — send a message to a specific connection
 - `DELETE /@connections/:connectionId` — disconnect a specific connection
 
+### WebSocket Stream Routes
+
+A `config.ws` entry can be a **stream route** instead of a lifecycle-routes
+map: set `stream: true` and `command` instead of `routes`. The whole
+connection becomes one long-lived command session — every client frame
+(text or binary) is written to the command's stdin, and every line the
+command writes to stdout is sent back as a text frame:
+
+```yaml
+config:
+  ws:
+    "/transcribe":
+      stream: true
+      command: aux4 whisper stream
+      idleTimeout: 60000      # default: 60000 (ms with no stdin/stdout activity)
+      maxDuration: 1800000    # default: 1800000 (ms total session lifetime)
+      maxPerPrincipal: 5      # default: 5 (concurrent sessions per principal)
+      public: false           # default: false — runs through the same security.auth as config.api
+```
+
+The command is whatever the route declares — nothing here is specific to any
+one consumer. The connecting principal (from `security.auth`, same as a
+`config.api` route) is who the session is bound to; it is never something the
+client supplies. On disconnect, or when `idleTimeout`/`maxDuration` elapses,
+the command is killed (`SIGTERM`, escalating to `SIGKILL` if it doesn't exit).
+`maxPerPrincipal` is shared with the REST session routes below — both count
+against the same per-principal cap.
+
 ## SSE Streaming
 
 Routes with `stream: true` use Server-Sent Events:
@@ -801,6 +842,58 @@ config:
 ```
 
 Each stdout line is sent as `data: <line>\n\n`. On exit, `event: done` is sent.
+
+This is a **one-shot** stream: the command runs once per request with no way
+for the client to send it input while it runs. For a long-lived command that
+needs ongoing input from the client, use **Session Streaming** below.
+
+## Session Streaming
+
+`config.sessions` wires up a generic, command-agnostic way to run a long-lived
+command and exchange data with it over time, instead of the one-shot
+request/response (or one-shot SSE) model. Each entry gets four routes for
+free:
+
+```yaml
+config:
+  sessions:
+    "/transcribe":
+      command: aux4 whisper stream
+      idleTimeout: 60000      # default: 60000 (ms with no stdin/stdout activity)
+      maxDuration: 1800000    # default: 1800000 (ms total session lifetime)
+      maxPerPrincipal: 5      # default: 5 (concurrent sessions per principal)
+      heartbeat: 15000        # default: 15000 (ms between SSE heartbeat comments)
+      public: false           # default: false — same auth as config.api routes
+```
+
+| Route | Behavior |
+|-------|----------|
+| `POST /api/transcribe` | Spawns `command` and returns `{"id": "<session id>"}`. The session is bound to the caller's principal (from `security.auth`, same as a `config.api` route). |
+| `POST /api/transcribe/:id/input` | Writes the raw request body to the command's stdin. The body is forwarded byte-for-byte — no parsing, no content-type restriction. |
+| `POST /api/transcribe/:id/end` | Closes the command's stdin (EOF), letting it flush any final output before exiting on its own. |
+| `GET /api/transcribe/:id/events` | Server-Sent Events stream of the command's stdout, one line per `data:` event. Sends a `: heartbeat` comment every `heartbeat` ms, and an `event: end` when the command exits (`event: error` first if the exit code was non-zero). |
+
+The command is whatever the route declares — there is nothing whisper (or any
+other consumer) specific about this feature; `command` can be any aux4
+command. The client never supplies argv or shell text: query parameters,
+headers, and the principal are passed to the command only as declared
+variables (`${query}`, `${headers}`, `${principal}`), the same mechanism
+`config.api` routes use — never interpolated into a shell string.
+
+**Session ownership.** A session is bound to the principal that created it. A
+request to `/input`, `/end`, or `/events` for a session id from a *different*
+principal (or an anonymous caller when the session belongs to an
+authenticated one) gets a `404` — identical to a session that doesn't exist,
+so a session's existence can't be probed by another principal.
+
+**Limits and teardown.** `maxPerPrincipal` caps how many concurrent sessions
+one principal can have open across every `config.sessions` route **and** every
+WebSocket stream route — exceeding it returns `429`. `idleTimeout` kills the
+command if no stdin/stdout activity occurs for that long; `maxDuration` kills
+it unconditionally once the session has run that long, regardless of
+activity. Disconnecting the `/events` stream also tears the command down
+immediately. In every case, teardown sends `SIGTERM` first and escalates to
+`SIGKILL` if the process hasn't exited within 2 seconds.
 
 ## Rate Limiting
 
