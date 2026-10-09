@@ -271,6 +271,12 @@ The server accepts a request body for **any** content-type and delivers it to th
 
 **Note:** the raw catch-all path captures the body as a UTF-8 string, so a truly binary payload sent under an unregistered content-type may be lossy. Text bodies (including `multipart/related` with JSON + text parts, as produced by `aux4 curl --upload`) are preserved exactly.
 
+**Note:** for `multipart/form-data` uploads, the file is written to disk under a name derived from
+the client-supplied filename, but that name is sanitized to a plain basename first — directory
+components, `..`, and embedded NUL bytes are stripped so an uploaded file can never be written
+outside its request's temp directory. The original client-supplied filename (unsanitized) is still
+reported in `body.<field>[].filename`; only the on-disk `path` is constrained.
+
 ### Large Request Bodies
 
 `${body.field}` / `value(body)` and the other command-variable flags (`params`, `query`, `headers`,

@@ -1,5 +1,22 @@
 # Release notes
 
+## 2.1.10
+
+### Security fix: multipart file uploads could write outside the request's temp directory via a crafted filename
+
+`RestHandler.processMultipart` built the on-disk path for an uploaded file as
+`${request.tmpDir}/${part.filename}` and wrote it with `fs.writeFileSync`, trusting the
+client-supplied multipart `filename` field as a path component. A filename containing `../`
+segments (or an absolute path) could escape the per-request temp directory and overwrite any file
+the server process has permission to write.
+
+Fixed: the filename is now sanitized before it ever reaches the filesystem — directory components
+(both `/` and `\`-style) are stripped down to a basename, embedded NUL bytes are removed, and `.`/
+`..`/empty names fall back to a generated name. As defense in depth, the resolved write path is
+also verified to stay inside `request.tmpDir` before writing, and two uploads that sanitize to the
+same name no longer clobber each other. The original client-supplied name is still reported back
+in the upload metadata (`body.<field>[].filename`); only the on-disk path is constrained.
+
 ## 2.1.9
 
 ### Fix: a request body around 400+ KB crashed `config.api` routes with an opaque 500 ("spawn E2BIG")
