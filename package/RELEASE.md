@@ -1,5 +1,36 @@
 # Release notes
 
+## 2.1.9
+
+### Fix: a request body around 400+ KB crashed `config.api` routes with an opaque 500 ("spawn E2BIG")
+
+`RestHandler.buildArgs` embedded the *entire* request body (and `--params`/`--query`) as a flag in
+the shell command string passed to the child process. That whole string is a single execve argv
+entry, and Linux caps a single argv string at `MAX_ARG_STRLEN` (128 KiB) — a voice-transcription or
+file-upload body well past that (observed around a 10-second audio phrase, ~430 KB base64) made the
+command spawn fail with a raw, uncaught `E2BIG`, surfaced to the client as a generic
+`{"message":"Internal Server Error","error":"Unexpected error"}` with no indication of the cause.
+
+Fixed in several parts:
+
+- `buildArgs` now skips embedding any single flag (`--params`, `--query`, `--headers`, `--cookies`,
+  `--principal`, `--body`, `--configFile`) whose serialized value exceeds 64 KiB. This is safe
+  because `CommandPool.execute` already pipes the complete event (including the untruncated body)
+  on the child's stdin — a `stdin:`-based command always receives the full payload regardless of
+  size. Only a command that reads an oversized field via its argv flag (`--body` directly, or
+  `value(body.x)`) will not see it. See the README "Large request bodies" section.
+- `Command.js` `execute()`/`stream()` now attach an `error` listener to the child's stdin before
+  writing, so a child that exits or closes stdin early (as happened during the E2BIG crash) raises
+  an `EPIPE` on write that is safely swallowed instead of escaping as an unhandled stream error.
+- The generic `catch` in `RestHandler.handle()` now logs `error.stack` to the server log before
+  replying, and returns `413 Payload Too Large` with an actionable message for an
+  argv-too-large (`E2BIG`-class) failure instead of the opaque `500`/"Unexpected error".
+- `SessionHandler.authenticate()` now forwards `reply` through to `AuthHandler.authenticate()` at
+  all four session route call sites (create/input/end/stream). Previously it called
+  `authHandler.authenticate(request)` without `reply`, so a `type:oauth` session nearing token
+  expiry never got its refreshed session cookie rotated onto the response — silently dropping
+  cookie refresh for every session route.
+
 ## 2.1.8
 
 ### Fix: `config.sessions` `/input` corrupted the stdin payload unless the client sent an unusual Content-Type

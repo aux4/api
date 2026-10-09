@@ -125,6 +125,20 @@ response rules as a command. Absolute, cross-package, symlink-escaped, or
 request-selected modules are rejected. Changing trusted configuration retires
 the old runtime after active calls finish.
 
+#### Large Request Bodies
+
+`${body.field}`/`value(body)` and the other command-variable flags (`params`, `query`, `headers`,
+`cookies`, `principal`) reach the command as `--body`/`--params`/etc. shell arguments. Any single one
+of them whose serialized value exceeds 64 KiB is **not** passed as an argument — it is silently
+omitted, so `${body.field}`/`value(body)` resolve empty for an oversized body. This keeps the
+command's spawn well under the Linux single-argument limit a large payload would otherwise overflow,
+which previously surfaced as an opaque `500 Internal Server Error`.
+
+The complete, untruncated body is always still piped to the command on **stdin** as part of the
+AWS API Gateway-style event, regardless of size. A route expecting large bodies (uploads, audio/video
+payloads, etc.) should have its command read the body from stdin instead of relying on
+`${body.field}`/`value(body)`/`--body`.
+
 #### Timeout
 
 Commands time out after 30 seconds by default. Set `server.timeout` for global override or `timeout` on individual routes.

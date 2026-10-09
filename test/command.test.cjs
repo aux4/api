@@ -33,6 +33,30 @@ test("executeFile still runs a normal-sized command", async () => {
   assert.equal(result.stdout, "ok");
 });
 
+// A write large enough to not fit the OS pipe buffer in one go, against a
+// child that has already closed its read end, reliably produces a real write
+// EPIPE at the Node layer (a small write can silently succeed into the pipe
+// buffer even though nothing will ever read it).
+const STDIN_LARGER_THAN_PIPE_BUFFER = "x".repeat(2 * 1024 * 1024);
+
+test("execute() does not crash the process when the child's stdin closes before the write (EPIPE)", async () => {
+  // Deterministically close the child's own fd 0 before it reads anything, so
+  // the write to child.stdin is guaranteed to raise EPIPE (rather than racing
+  // against the child's exit). Without an 'error' listener on child.stdin,
+  // this EPIPE is an unhandled stream error that throws and crashes the
+  // process instead of letting Command.execute resolve normally.
+  const result = await Command.execute("exec 0<&-; sleep 0.3; exit 0", STDIN_LARGER_THAN_PIPE_BUFFER, 5000);
+
+  assert.equal(result.exitCode, 0);
+});
+
+test("stream() does not crash the process when the child's stdin closes before the write (EPIPE)", async () => {
+  const child = Command.stream("exec 0<&-; sleep 0.3; exit 0", STDIN_LARGER_THAN_PIPE_BUFFER, 5000);
+
+  const exitCode = await new Promise(resolve => child.on("exit", resolve));
+  assert.equal(exitCode, 0);
+});
+
 test("argvEnvSize measures the largest argument and the total argv+env bytes", () => {
   const { total, maxArg } = Command.argvEnvSize("node", ["-e", "abcd"], { FOO: "bar" });
 

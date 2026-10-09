@@ -271,6 +271,21 @@ The server accepts a request body for **any** content-type and delivers it to th
 
 **Note:** the raw catch-all path captures the body as a UTF-8 string, so a truly binary payload sent under an unregistered content-type may be lossy. Text bodies (including `multipart/related` with JSON + text parts, as produced by `aux4 curl --upload`) are preserved exactly.
 
+### Large Request Bodies
+
+`${body.field}` / `value(body)` and the other command-variable flags (`params`, `query`, `headers`,
+`cookies`, `principal`) are delivered to the command as `--body`/`--params`/etc. shell arguments.
+Any single one of them whose serialized value is **larger than 64 KiB is not passed as an argument**
+— it is silently omitted from the flag, so `${body.field}` and `value(body)` are unavailable for an
+oversized body (they resolve empty). This keeps the command spawn well under the Linux single-argument
+limit that a large payload would otherwise overflow.
+
+The full request — including the complete, untruncated body — is **always** also piped to the
+command on **stdin** as the AWS API Gateway-style event (see [Event Format (stdin)](#event-format-stdin)),
+regardless of size. A command that needs to handle large bodies (file uploads, audio/video payloads,
+etc.) should read the body from stdin (`stdin:` executor, parsing the JSON event's `body` field)
+rather than relying on `${body.field}`/`value(body)`/`--body`.
+
 ### Response Format (stdout)
 
 | Output | Behavior |
