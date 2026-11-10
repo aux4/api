@@ -31,6 +31,11 @@ concurrency:
 permissions:
   contents: write
 
+# pkger (used internally by aux4/action's install/test/publish steps) resolves
+# package dependencies against this registry; empty = pkger's prod default.
+env:
+  AUX4_REGISTRY_URL: ${{ github.ref_name == 'dev' && 'https://dev.api.hub.aux4.io/v1/packages' || '' }}
+
 jobs:
   lint:
     runs-on: ubuntu-latest
