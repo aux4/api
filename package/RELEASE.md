@@ -21,7 +21,7 @@ Existing `event.body` / `--body` behavior is unchanged.
 that stopped one server and immediately started another on the same port
 could hit `EADDRINUSE` on the new process (or have its readiness check talk
 to the still-shutting-down old one). `stopByPid()` now polls
-(`process.kill(pid, 0)`, bounded ~5s) until the old process has actually
+(`process.kill(pid, 0)`, bounded ~3s) until the old process has actually
 exited before returning. `aux4 api stop` behavior is otherwise unchanged.
 
 ## 2.1.8

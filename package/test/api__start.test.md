@@ -1,5 +1,9 @@
 # api start
 
+```timeout
+10000
+```
+
 ```file:config.yaml
 config:
   port: 18710

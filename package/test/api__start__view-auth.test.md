@@ -6,6 +6,10 @@ are used: one with no `security.auth` (public, unchanged behavior) and one with
 `security.auth.type: oauth` (gated, real login redirect), driven through the real OAuth
 dance against a mock OIDC provider.
 
+```timeout
+10000
+```
+
 ```file:views/layouts/main.hbs
 <html><body>{{{body}}}</body></html>
 ```
