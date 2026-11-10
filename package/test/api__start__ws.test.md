@@ -200,7 +200,7 @@ pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' '
 
 ```file:config.yaml
 config:
-  port: 18712
+  port: 18990
   security:
     auth:
       type: bearer
@@ -269,7 +269,7 @@ config:
 ```file:ws-stream-noauth-client.js
 const W = require("ws");
 const t = setTimeout(() => { process.exit(1); }, 3000);
-const w = new W("ws://localhost:18712/wsstream");
+const w = new W("ws://localhost:18990/wsstream");
 w.on("open", () => { w.send("should never be read\n"); });
 w.on("close", (code) => { console.log("closed:" + code); clearTimeout(t); process.exit(0); });
 w.on("error", (e) => { console.error("ws error:", e.message); clearTimeout(t); process.exit(1); });
@@ -278,7 +278,7 @@ w.on("error", (e) => { console.error("ws error:", e.message); clearTimeout(t); p
 ```file:ws-stream-auth-client.js
 const W = require("ws");
 const t = setTimeout(() => { process.exit(1); }, 10000);
-const w = new W("ws://localhost:18712/wsstream", { headers: { Authorization: "Bearer auth-user" } });
+const w = new W("ws://localhost:18990/wsstream", { headers: { Authorization: "Bearer auth-user" } });
 // A small delay after open: authentication (spawning the validator command)
 // happens server-side before the session is created and the frame listener
 // is attached, so sending immediately on open can race ahead of it.
@@ -300,8 +300,8 @@ aux4 api stop 2>/dev/null
 
 ```execute
 nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
-for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18712/ && break; sleep 0.25; done
-curl -s -o /dev/null -w "%{http_code}" http://localhost:18712/
+for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18990/ && break; sleep 0.25; done
+curl -s -o /dev/null -w "%{http_code}" http://localhost:18990/
 ```
 
 ```expect
