@@ -1,6 +1,6 @@
 # Release notes
 
-## 2.1.9
+## 2.1.12
 
 ### Added: byte-exact raw request body on `event.rawBody` / `--rawBody`
 
