@@ -153,6 +153,48 @@ data: hello session
 event: end
 ```
 
+### should forward raw input bytes unmodified regardless of the client's Content-Type
+
+```timeout
+5000
+```
+
+```execute
+ID=$(curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo | jq -r '.id')
+curl -s -X POST -H "Authorization: Bearer user-a" --data-binary "hello default content-type" http://localhost:18713/api/echo/$ID/input >/dev/null
+curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/end >/dev/null
+curl -s -N -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/events
+```
+
+```expect:partial
+data: hello default content-type
+```
+
+```expect:partial
+event: end
+```
+
+### should forward raw input bytes unmodified when Content-Type is application/json
+
+```timeout
+5000
+```
+
+```execute
+ID=$(curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo | jq -r '.id')
+curl -s -X POST -H "Authorization: Bearer user-a" -H "Content-Type: application/json" --data-binary '{"not":"parsed, raw bytes"}' http://localhost:18713/api/echo/$ID/input >/dev/null
+curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/end >/dev/null
+curl -s -N -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/events
+```
+
+```expect:partial
+data: {"not":"parsed, raw bytes"}
+```
+
+```expect:partial
+event: end
+```
+
 ## unauthenticated
 
 ### should reject session create and events with 401 when no bearer token is presented
