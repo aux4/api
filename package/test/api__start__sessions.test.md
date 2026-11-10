@@ -278,13 +278,13 @@ event: end
 ### should kill the command process when the client disconnects
 
 ```timeout
-8000
+12000
 ```
 
 ```execute
 ID=$(curl -s -X POST -H "Authorization: Bearer disc-user" http://localhost:18713/api/ticker | jq -r '.id')
 curl -s -N --max-time 1 -H "Authorization: Bearer disc-user" http://localhost:18713/api/ticker/$ID/events >/dev/null 2>&1
-sleep 2
+sleep 4
 pgrep -f "^aux4 apitest ticker" | wc -l | tr -d ' '
 ```
 

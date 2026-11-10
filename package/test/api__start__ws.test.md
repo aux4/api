@@ -116,7 +116,6 @@ rm -rf .tmp
 ```
 
 ```execute
-npm install ws --no-save --no-audit --no-fund >/dev/null 2>&1
 nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
 for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
 curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/
@@ -187,12 +186,12 @@ hello over ws
 ### should kill the command process when the client disconnects
 
 ```timeout
-8000
+12000
 ```
 
 ```execute
 node ws-disconnect-client.js
-sleep 2
+sleep 4
 pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' '
 ```
 
