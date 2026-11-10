@@ -116,12 +116,13 @@ rm -rf .tmp
 ```
 
 ```execute
+PREEXISTING=$(ls -la . 2>&1; [ -d views ] && find views -type f 2>&1)
 npm install ws --no-save --no-audit --no-fund >/dev/null 2>&1
 rm -f .server.log
 nohup aux4 api start --configFile config.yaml >.server.log 2>&1 &
 for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
 CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/)
-if [ "$CODE" = "404" ]; then echo "$CODE"; else echo "DIAG log=[$(cat .server.log)] code=[$CODE]"; fi
+if [ "$CODE" = "404" ]; then echo "$CODE"; else echo "DIAG pre=[$PREEXISTING] log=[$(cat .server.log)] code=[$CODE]"; fi
 ```
 
 ```expect
