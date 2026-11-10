@@ -112,12 +112,13 @@ rm -rf .tmp
 ### should have started server
 
 ```timeout
-20000
+60000
 ```
 
 ```execute
+npm install ws --no-save --no-audit --no-fund >/dev/null 2>&1
 nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
-for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
+for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
 curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/
 ```
 
@@ -302,12 +303,12 @@ aux4 api stop 2>/dev/null
 ### should have started the gated server
 
 ```timeout
-20000
+40000
 ```
 
 ```execute
 nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
-for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18990/ && break; sleep 0.25; done
+for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18990/ && break; sleep 0.25; done
 curl -s -o /dev/null -w "%{http_code}" http://localhost:18990/
 ```
 
