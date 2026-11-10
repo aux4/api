@@ -116,10 +116,11 @@ rm -rf .tmp
 ```
 
 ```execute
-npm install ws --no-save --no-audit --no-fund >/dev/null 2>&1
-nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
+npm install ws --no-save --no-audit --no-fund >/dev/null
+rm -f .server.log
+nohup aux4 api start --configFile config.yaml >.server.log 2>&1 &
 for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
-curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/
+curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/ || cat .server.log >&2
 ```
 
 ```expect
@@ -307,9 +308,10 @@ aux4 api stop 2>/dev/null
 ```
 
 ```execute
-nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
+rm -f .server.log
+nohup aux4 api start --configFile config.yaml >.server.log 2>&1 &
 for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18990/ && break; sleep 0.25; done
-curl -s -o /dev/null -w "%{http_code}" http://localhost:18990/
+curl -s -o /dev/null -w "%{http_code}" http://localhost:18990/ || cat .server.log >&2
 ```
 
 ```expect
