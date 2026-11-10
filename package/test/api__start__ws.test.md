@@ -117,9 +117,11 @@ rm -rf .tmp
 
 ```execute
 npm install ws --no-save --no-audit --no-fund >/dev/null 2>&1
-nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
+rm -f .server.log
+nohup aux4 api start --configFile config.yaml >.server.log 2>&1 &
 for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
-curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/
+CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/)
+if [ "$CODE" = "404" ]; then echo "$CODE"; else echo "DIAG log=[$(cat .server.log)] code=[$CODE]"; fi
 ```
 
 ```expect
