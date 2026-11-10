@@ -1,5 +1,9 @@
 # api start sessions
 
+```timeout
+10000
+```
+
 ```file:config.yaml
 config:
   port: 18713

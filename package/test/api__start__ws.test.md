@@ -1,5 +1,9 @@
 # api start websocket
 
+```timeout
+10000
+```
+
 ```file:config.yaml
 config:
   port: 18711
@@ -197,6 +201,10 @@ pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' '
 ```
 
 ## WebSocket stream route with security.auth
+
+```timeout
+10000
+```
 
 ```file:config.yaml
 config:

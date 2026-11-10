@@ -1,5 +1,29 @@
 # Release notes
 
+## 2.1.9
+
+### Added: byte-exact raw request body on `event.rawBody` / `--rawBody`
+
+`Server.js`'s content-type parsers (JSON, urlencoded, wildcard) now capture
+the original request bytes in `req.rawBody` before parsing, and
+`EventBuilder.buildRestEvent` / `EventAdapter.buildSyntheticRequest` surface
+them as `event.rawBody` alongside the existing (JSON.stringify-reserialized)
+`event.body`. `RestHandler.buildArgs` forwards the same bytes as `--rawBody`
+to route commands. This is required for any route that verifies an HMAC
+signature over the exact bytes the client sent (e.g. Slack-style webhook
+verification) — the previously reconstructed `event.body` does not preserve
+original spacing/escaping and fails signature checks that depend on them.
+Existing `event.body` / `--body` behavior is unchanged.
+
+### Fixed: `aux4 api stop` could return before the old server released its port
+
+`Server.stopByPid()` sent `SIGTERM` and returned immediately, so a caller
+that stopped one server and immediately started another on the same port
+could hit `EADDRINUSE` on the new process (or have its readiness check talk
+to the still-shutting-down old one). `stopByPid()` now polls
+(`process.kill(pid, 0)`, bounded ~5s) until the old process has actually
+exited before returning. `aux4 api stop` behavior is otherwise unchanged.
+
 ## 2.1.8
 
 ### Fix: `config.sessions` `/input` corrupted the stdin payload unless the client sent an unusual Content-Type
