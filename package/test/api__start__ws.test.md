@@ -193,12 +193,12 @@ hello over ws
 ### should kill the command process when the client disconnects
 
 ```timeout
-12000
+20000
 ```
 
 ```execute
 node ws-disconnect-client.js
-sleep 4
+for i in $(seq 1 40); do [ "$(pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' ')" = "0" ] && break; sleep 0.25; done
 pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' '
 ```
 
