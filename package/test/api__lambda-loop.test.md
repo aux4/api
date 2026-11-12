@@ -18,32 +18,19 @@ served. The command daemon is disabled (`AUX4_API_NO_COMMAND_DAEMON=1`); unmatch
 routes return 404, which is still a real handler response. Each test starts its own
 mock runtime on a unique port and tears it down at the end.
 
-## warm-container state sync barrier
-
-```file:config.yaml
-config:
-  api: {}
-```
-
 ```file:mock-runtime.mjs
 import http from "http";
-import { readFileSync, appendFileSync, statSync } from "fs";
+import { readFileSync, appendFileSync } from "fs";
 
 const port = parseInt(process.argv[2] || "19147", 10);
 const EVENTS = "events.jsonl";
 const ORDER = "order.log";
-
-// Serve events from events.jsonl in order; each test writes its own file and its own
-// port, so the queue is fresh per case.
 let idx = 0;
 
 function nextEvent() {
   let lines;
-  try {
-    lines = readFileSync(EVENTS, "utf8").split("\n").filter(l => l.trim());
-  } catch {
-    return null;
-  }
+  try { lines = readFileSync(EVENTS, "utf8").split("\n").filter(l => l.trim()); }
+  catch { return null; }
   if (idx >= lines.length) return null;
   return lines[idx++];
 }
@@ -52,7 +39,7 @@ const server = http.createServer((req, res) => {
   const url = req.url || "";
   if (req.method === "GET" && url.endsWith("/invocation/next")) {
     const ev = nextEvent();
-    if (ev == null) return; // no more events: hang (the loop is bounded, never reaches here)
+    if (ev == null) return;
     res.setHeader("lambda-runtime-aws-request-id", "req-" + idx);
     res.statusCode = 200;
     res.end(ev);
@@ -61,17 +48,21 @@ const server = http.createServer((req, res) => {
   let body = "";
   req.on("data", c => (body += c));
   req.on("end", () => {
-    if (url.endsWith("/response")) {
-      try { appendFileSync(ORDER, "resp\n"); } catch {}
-    } else if (url.includes("/error")) {
-      try { appendFileSync(ORDER, "error\n"); } catch {}
-    }
+    if (url.endsWith("/response")) { try { appendFileSync(ORDER, "resp\n"); } catch {} }
+    else if (url.includes("/error")) { try { appendFileSync(ORDER, "error\n"); } catch {} }
     res.statusCode = 202;
     res.end("{}");
   });
 });
 
 server.listen(port, "127.0.0.1", () => console.log("mock runtime on " + port));
+```
+
+## warm-container state sync barrier
+
+```file:config.yaml
+config:
+  api: {}
 ```
 
 ```file:stub-ok.mjs
@@ -84,53 +75,6 @@ export async function pullFromEnv() {
 }
 
 export async function pushFromEnv() {
-  return { ok: true };
-}
-```
-
-```file:strict-ok.mjs
-import { appendFileSync } from "fs";
-export async function pullFromEnv() {
-  appendFileSync("order.log", "pull\n");
-  return { complete: true };
-}
-export async function pushFromEnv() {
-  appendFileSync("order.log", "push\n");
-  return { ok: true };
-}
-```
-
-```file:strict-pull-fail.mjs
-import { appendFileSync } from "fs";
-export async function pullFromEnv() {
-  appendFileSync("order.log", "pull\n");
-  throw Object.assign(new Error("pull unavailable"), { statusCode: 503 });
-}
-export async function pushFromEnv() { appendFileSync("order.log", "push\n"); }
-```
-
-```file:strict-push-fail.mjs
-import { appendFileSync } from "fs";
-export async function pullFromEnv() {
-  appendFileSync("order.log", "pull\n");
-  return { complete: true };
-}
-export async function pushFromEnv() {
-  appendFileSync("order.log", "push\n");
-  throw Object.assign(new Error("push unavailable"), { statusCode: 503 });
-}
-```
-
-```file:strict-retry.mjs
-import { appendFileSync } from "fs";
-let pulls = 0;
-export async function pullFromEnv() {
-  appendFileSync("order.log", "pull\n");
-  if (++pulls === 1) throw new Error("transient pull failure");
-  return { complete: true };
-}
-export async function pushFromEnv() {
-  appendFileSync("order.log", "push\n");
   return { ok: true };
 }
 ```
@@ -229,6 +173,53 @@ Strict mode applies to every ordinary HTTP route and requires module hooks. Thes
 cases use an unmatched route (a real 404 handler response) so the barrier is not
 accidentally limited to `/action/` routes.
 
+```file:strict-ok.mjs
+import { appendFileSync } from "fs";
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  return { complete: true };
+}
+export async function pushFromEnv() {
+  appendFileSync("order.log", "push\n");
+  return { ok: true };
+}
+```
+
+```file:strict-pull-fail.mjs
+import { appendFileSync } from "fs";
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  throw Object.assign(new Error("pull unavailable"), { statusCode: 503 });
+}
+export async function pushFromEnv() { appendFileSync("order.log", "push\n"); }
+```
+
+```file:strict-push-fail.mjs
+import { appendFileSync } from "fs";
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  return { complete: true };
+}
+export async function pushFromEnv() {
+  appendFileSync("order.log", "push\n");
+  throw Object.assign(new Error("push unavailable"), { statusCode: 503 });
+}
+```
+
+```file:strict-retry.mjs
+import { appendFileSync } from "fs";
+let pulls = 0;
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  if (++pulls === 1) throw new Error("transient pull failure");
+  return { complete: true };
+}
+export async function pushFromEnv() {
+  appendFileSync("order.log", "push\n");
+  return { ok: true };
+}
+```
+
 ### should pull then push before acknowledging a successful HTTP response
 
 ```file:events.jsonl
@@ -240,7 +231,7 @@ accidentally limited to `/action/` routes.
 ```
 
 ```execute
-rm -f order.log; nohup node mock-runtime.mjs 19151 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19151 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-ok.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-ok.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+rm -f order.log; nohup node mock-runtime.mjs 19151 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19151 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-ok.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-ok.mjs" node "$PWD/../lib/server.js" lambda-loop "" "{}" >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
 ```
 
 ```expect
@@ -260,7 +251,7 @@ resp
 ```
 
 ```execute
-rm -f order.log; nohup node mock-runtime.mjs 19152 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19152 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-pull-fail.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-pull-fail.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+rm -f order.log; nohup node mock-runtime.mjs 19152 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19152 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-pull-fail.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-pull-fail.mjs" node "$PWD/../lib/server.js" lambda-loop "" "{}" >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
 ```
 
 ```expect
@@ -280,7 +271,7 @@ error
 ```
 
 ```execute
-rm -f order.log; nohup node mock-runtime.mjs 19153 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19153 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-retry.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-retry.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+rm -f order.log; nohup node mock-runtime.mjs 19153 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=2 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19153 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-retry.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-retry.mjs" node "$PWD/../lib/server.js" lambda-loop "" "{}" >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
 ```
 
 ```expect
@@ -302,7 +293,7 @@ resp
 ```
 
 ```execute
-rm -f order.log; nohup node mock-runtime.mjs 19154 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19154 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-push-fail.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-push-fail.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+rm -f order.log; nohup node mock-runtime.mjs 19154 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19154 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-push-fail.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-push-fail.mjs" node "$PWD/../lib/server.js" lambda-loop "" "{}" >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
 ```
 
 ```expect
