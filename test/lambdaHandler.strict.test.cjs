@@ -101,6 +101,14 @@ test("strict incomplete pull blocks handler and reports invocation error", async
   assert.deepEqual(result.order, ["pull", "error"]);
 });
 
+test("strict rejects contradictory explicit false result flags", async () => {
+  const pre = await runLoop({ events: [http404("/custom/mutate")], mode: "pre-ok-false" });
+  assert.deepEqual(pre.order, ["pull", "error"]);
+
+  const post = await runLoop({ events: [http404("/custom/mutate")], mode: "post-ok-false" });
+  assert.deepEqual(post.order, ["pull", "push", "error"]);
+});
+
 test("strict push failure reports invocation error instead of success", async () => {
   const result = await runLoop({ events: [http404("/custom/mutate")], mode: "push-fail" });
   assert.deepEqual(result.order, ["pull", "push", "error"]);
@@ -143,6 +151,9 @@ test("bundled package CLI enforces strict success, failures, and bounded retry",
 
   const pushFailure = await runLoop({ artifact: true, mode: "push-fail", events: [http404("/custom/mutate")] });
   assert.deepEqual(pushFailure.order, ["pull", "push", "error"]);
+
+  const falseFlag = await runLoop({ artifact: true, mode: "post-ok-false", events: [http404("/custom/mutate")] });
+  assert.deepEqual(falseFlag.order, ["pull", "push", "error"]);
 
   const retry = await runLoop({
     artifact: true,

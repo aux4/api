@@ -7,6 +7,7 @@ function record(env, value) {
 export async function pullFromEnv(env) {
   record(env, "pull");
   if (env.CLOUD_STATE_ENABLED === "false") return { skipped: true };
+  if (env.STRICT_SYNC_MODE === "pre-ok-false") return { complete: true, ok: false };
   if (env.STRICT_SYNC_MODE === "fail-once") {
     if (!globalThis.__strictPulls) {
       globalThis.__strictPulls = true;
@@ -20,6 +21,7 @@ export async function pullFromEnv(env) {
 export async function pushFromEnv(env) {
   record(env, "push");
   if (env.CLOUD_STATE_ENABLED === "false") return { skipped: true };
+  if (env.STRICT_SYNC_MODE === "post-ok-false") return { pushed: 0, deleted: 0, ok: false };
   if (env.STRICT_SYNC_MODE === "push-fail") throw new Error("push unavailable");
   return { ok: true };
 }
