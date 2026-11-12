@@ -9,6 +9,8 @@ Because a warm container reuses its filesystem across invocations, and several w
 
 Both sync steps are **best-effort**: a failed import, pull, or push is logged and **never** aborts the request.
 
+Set **`AUX4_LAMBDA_STATE_SYNC_REQUIRED=true`** (or `1`/`yes`) only for quota-enrolled VMs to switch to a strict barrier. In strict mode both `AUX4_LAMBDA_PRE_INVOKE_MODULE` and `AUX4_LAMBDA_POST_INVOKE_MODULE` must import and export their respective functions. The pull runs before every ordinary HTTP handler, without TTL coalescing; a thrown or incomplete pull aborts the invocation and never runs the handler or pushes stale state. The push runs after the handler (including a handler-produced HTTP error) and before the Runtime API response; a failed push posts an invocation error instead of success. WebSocket and structured execution events retain their existing paths.
+
 ##### Environment Variables
 
 - **`AUX4_LAMBDA_PRE_INVOKE_MODULE`** — path to an ES module exporting `pullFromEnv(env)`; imported in-process and called before a stateful action.
@@ -16,6 +18,7 @@ Both sync steps are **best-effort**: a failed import, pull, or push is logged an
 - **`AUX4_LAMBDA_PRE_INVOKE_TTL_MS`** — coalescing window for the pre-invoke pull, in milliseconds (default `2000`; `0` = pull before every action).
 - **`AUX4_LAMBDA_POST_INVOKE_MODULE`** — path to an ES module exporting `pushFromEnv(env)`; imported in-process and called after the response.
 - **`AUX4_LAMBDA_POST_INVOKE`** — shell command run as a fallback when the post-invoke module can't be imported or its push fails.
+- **`AUX4_LAMBDA_STATE_SYNC_REQUIRED`** — `true`/`1`/`yes` enables the fail-closed quota-enrolled VM barrier described above; unset/false preserves legacy best-effort behavior.
 - **`AUX4_LAMBDA_MAX_INVOCATIONS`** — exit the loop after N handled invocations instead of running forever (default unset = run forever); useful for a bounded drain or a test harness.
 - **`AWS_LAMBDA_RUNTIME_API`** — the runtime API host:port the loop polls for invocations (set by the Lambda runtime). Required; the command exits if it is unset.
 

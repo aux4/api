@@ -88,6 +88,53 @@ export async function pushFromEnv() {
 }
 ```
 
+```file:strict-ok.mjs
+import { appendFileSync } from "fs";
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  return { complete: true };
+}
+export async function pushFromEnv() {
+  appendFileSync("order.log", "push\n");
+  return { ok: true };
+}
+```
+
+```file:strict-pull-fail.mjs
+import { appendFileSync } from "fs";
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  throw Object.assign(new Error("pull unavailable"), { statusCode: 503 });
+}
+export async function pushFromEnv() { appendFileSync("order.log", "push\n"); }
+```
+
+```file:strict-push-fail.mjs
+import { appendFileSync } from "fs";
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  return { complete: true };
+}
+export async function pushFromEnv() {
+  appendFileSync("order.log", "push\n");
+  throw Object.assign(new Error("push unavailable"), { statusCode: 503 });
+}
+```
+
+```file:strict-retry.mjs
+import { appendFileSync } from "fs";
+let pulls = 0;
+export async function pullFromEnv() {
+  appendFileSync("order.log", "pull\n");
+  if (++pulls === 1) throw new Error("transient pull failure");
+  return { complete: true };
+}
+export async function pushFromEnv() {
+  appendFileSync("order.log", "push\n");
+  return { ok: true };
+}
+```
+
 ```file:stub-throw.mjs
 // Mock engine whose pull throws — the pre-invoke pull must swallow it and let the
 // request proceed (best-effort barrier, never aborts the request).
@@ -174,4 +221,92 @@ rm -f order.log; nohup node mock-runtime.mjs 19150 >/dev/null 2>&1 & MOCK=$!; sl
 
 ```expect
 resp
+```
+
+## strict quota barrier
+
+Strict mode applies to every ordinary HTTP route and requires module hooks. These
+cases use an unmatched route (a real 404 handler response) so the barrier is not
+accidentally limited to `/action/` routes.
+
+### should pull then push before acknowledging a successful HTTP response
+
+```file:events.jsonl
+{"httpMethod":"GET","path":"/custom/mutate","pathParameters":{"proxy":"custom/mutate"},"headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"identity":{"sourceIp":"1.2.3.4"}}}
+```
+
+```timeout
+30000
+```
+
+```execute
+rm -f order.log; nohup node mock-runtime.mjs 19151 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19151 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-ok.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-ok.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+```
+
+```expect
+pull
+push
+resp
+```
+
+### should block the handler and avoid push when pull fails
+
+```file:events.jsonl
+{"httpMethod":"GET","path":"/custom/mutate","pathParameters":{"proxy":"custom/mutate"},"headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"identity":{"sourceIp":"1.2.3.4"}}}
+```
+
+```timeout
+30000
+```
+
+```execute
+rm -f order.log; nohup node mock-runtime.mjs 19152 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19152 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-pull-fail.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-pull-fail.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+```
+
+```expect
+pull
+error
+```
+
+### should retry a failed pull instead of using a TTL readiness cache
+
+```file:events.jsonl
+{"httpMethod":"GET","path":"/custom/mutate","pathParameters":{"proxy":"custom/mutate"},"headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"identity":{"sourceIp":"1.2.3.4"}}}
+{"httpMethod":"GET","path":"/custom/mutate","pathParameters":{"proxy":"custom/mutate"},"headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"identity":{"sourceIp":"1.2.3.4"}}}
+```
+
+```timeout
+30000
+```
+
+```execute
+rm -f order.log; nohup node mock-runtime.mjs 19153 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19153 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-retry.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-retry.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+```
+
+```expect
+pull
+error
+pull
+push
+resp
+```
+
+### should post an invocation error when push fails instead of success
+
+```file:events.jsonl
+{"httpMethod":"GET","path":"/custom/mutate","pathParameters":{"proxy":"custom/mutate"},"headers":{},"body":null,"isBase64Encoded":false,"requestContext":{"identity":{"sourceIp":"1.2.3.4"}}}
+```
+
+```timeout
+30000
+```
+
+```execute
+rm -f order.log; nohup node mock-runtime.mjs 19154 >/dev/null 2>&1 & MOCK=$!; sleep 1; AUX4_API_NO_COMMAND_DAEMON=1 AUX4_LAMBDA_MAX_INVOCATIONS=1 AWS_LAMBDA_RUNTIME_API=127.0.0.1:19154 AUX4_LAMBDA_STATE_SYNC_REQUIRED=true AUX4_LAMBDA_PRE_INVOKE_MODULE="$PWD/strict-push-fail.mjs" AUX4_LAMBDA_POST_INVOKE_MODULE="$PWD/strict-push-fail.mjs" aux4 api lambda-loop --configFile config.yaml >/dev/null 2>&1; kill $MOCK 2>/dev/null; cat order.log
+```
+
+```expect
+pull
+push
+error
 ```

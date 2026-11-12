@@ -445,6 +445,8 @@ Because a warm container reuses its filesystem across invocations — and severa
 
 Both steps are **best-effort**: a failed pull or push is logged and never aborts the request. The state sync itself is provided by the surrounding image, wired through these environment variables:
 
+For quota-enrolled VMs, set `AUX4_LAMBDA_STATE_SYNC_REQUIRED=true` to enable the strict barrier. Strict mode requires both in-process module hooks, pulls before every ordinary HTTP handler (including custom non-`/action/` routes), and pushes after the handler but before acknowledging either a success or HTTP error response. Pull failures or incomplete pulls prevent the handler from running; push failures post an invocation error. Strict pulls never use the legacy TTL coalescing or shell fallbacks. Leave the variable unset/false for the legacy best-effort behavior.
+
 | Variable | Purpose |
 |----------|---------|
 | `AUX4_LAMBDA_PRE_INVOKE_MODULE` | Path to an ES module exporting `pullFromEnv(env)`; imported in-process and called before a stateful action. |
@@ -452,6 +454,7 @@ Both steps are **best-effort**: a failed pull or push is logged and never aborts
 | `AUX4_LAMBDA_PRE_INVOKE_TTL_MS` | Coalescing window for the pre-invoke pull, in milliseconds (default `2000`; `0` = pull before every action). |
 | `AUX4_LAMBDA_POST_INVOKE_MODULE` | Path to an ES module exporting `pushFromEnv(env)`; imported in-process and called after the response. |
 | `AUX4_LAMBDA_POST_INVOKE` | Shell command run as a fallback when the module can't be imported or its push fails. |
+| `AUX4_LAMBDA_STATE_SYNC_REQUIRED` | Set to `true`/`1`/`yes` for the fail-closed quota-enrolled VM barrier. Requires both module hooks; strict mode covers every ordinary HTTP route and disables pull TTL coalescing. |
 | `AUX4_LAMBDA_MAX_INVOCATIONS` | Exit the loop after N handled invocations instead of running forever (default unset = run forever). Useful for a bounded drain or a test harness. |
 
 A route is classified as a stateful action purely by its normalized route path (the greedy `{proxy+}` capture, falling back to `event.path` / `event.rawPath`, with a leading `/`) containing the `/action/` segment.
