@@ -445,7 +445,7 @@ Because a warm container reuses its filesystem across invocations — and severa
 
 Both steps are **best-effort**: a failed pull or push is logged and never aborts the request. The state sync itself is provided by the surrounding image, wired through these environment variables:
 
-For quota-enrolled VMs, set `AUX4_LAMBDA_STATE_SYNC_REQUIRED=true` to enable the strict barrier. Strict mode requires both in-process module hooks, pulls before every ordinary HTTP handler (including custom non-`/action/` routes), and pushes after the handler but before acknowledging either a success or HTTP error response. Pull failures or incomplete pulls prevent the handler from running; push failures post an invocation error. Strict pulls never use the legacy TTL coalescing or shell fallbacks. Leave the variable unset/false for the legacy best-effort behavior.
+For quota-enrolled VMs, set `AUX4_LAMBDA_STATE_SYNC_REQUIRED=true` to enable the strict barrier. Strict mode requires both in-process module hooks, pulls before every ordinary HTTP handler (including custom non-`/action/` routes) and WebSocket dispatch, and pushes after dispatch but before acknowledging either a success or HTTP error response. Pull failures or incomplete pulls prevent the handler from running; push failures post an invocation error. Strict pulls never use the legacy TTL coalescing or shell fallbacks. Leave the variable unset/false for the legacy best-effort behavior.
 
 | Variable | Purpose |
 |----------|---------|

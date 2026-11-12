@@ -9,7 +9,9 @@ Because a warm container reuses its filesystem across invocations, and several w
 
 Both sync steps are **best-effort**: a failed import, pull, or push is logged and **never** aborts the request.
 
-Set **`AUX4_LAMBDA_STATE_SYNC_REQUIRED=true`** (or `1`/`yes`) only for quota-enrolled VMs to switch to a strict barrier. In strict mode both `AUX4_LAMBDA_PRE_INVOKE_MODULE` and `AUX4_LAMBDA_POST_INVOKE_MODULE` must import and export their respective functions. The pull runs before every ordinary HTTP handler, without TTL coalescing; a thrown or incomplete pull aborts the invocation and never runs the handler or pushes stale state. The push runs after the handler (including a handler-produced HTTP error) and before the Runtime API response; a failed push posts an invocation error instead of success. WebSocket and structured execution events retain their existing paths.
+Set **`AUX4_LAMBDA_STATE_SYNC_REQUIRED=true`** (or `1`/`yes`) only for quota-enrolled VMs to switch to a strict barrier. In strict mode both `AUX4_LAMBDA_PRE_INVOKE_MODULE` and `AUX4_LAMBDA_POST_INVOKE_MODULE` must import and export their respective functions. The pull runs before every ordinary HTTP handler and WebSocket dispatch, without TTL coalescing; a thrown or incomplete pull aborts the invocation and never runs the handler or pushes stale state. The push runs after dispatch (including a handler-produced HTTP error) and before the Runtime API response; a failed push posts an invocation error instead of success. Structured execution events retain their existing execution-specific barrier and are not double-pushed.
+
+A `{ skipped: true }` hook result is accepted only when `CLOUD_STATE_ENABLED` is explicitly disabled (`false`, `0`, or `no`); an unconfigured/ambiguous skipped result fails closed.
 
 ##### Environment Variables
 
