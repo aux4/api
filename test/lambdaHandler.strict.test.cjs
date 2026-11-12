@@ -30,12 +30,15 @@ function startRuntime(events, orderFile) {
   return new Promise(resolve => server.listen(0, "127.0.0.1", () => resolve(server)));
 }
 
-async function runLoop({ events, mode, stateEnabled, config = { api: {} }, maxInvocations = events.length }) {
+async function runLoop({ events, mode, stateEnabled, config = { api: {} }, maxInvocations = events.length, artifact = false }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "aux4-api-strict-"));
   const orderFile = path.join(dir, "order.log");
   const runtime = await startRuntime(events, orderFile);
   const address = runtime.address();
-  const child = spawn(process.execPath, ["-e", `require('./lib/lambdaHandler').lambdaLoop(${JSON.stringify(config)})`], {
+  const childArgs = artifact
+    ? ["package/lib/server.js", "lambda-loop", "", JSON.stringify(config.api || {})]
+    : ["-e", `require('./lib/lambdaHandler').lambdaLoop(${JSON.stringify(config)})`];
+  const child = spawn(process.execPath, childArgs, {
     cwd: packageDir,
     env: {
       ...process.env,
@@ -129,4 +132,23 @@ test("strict mode requires both valid module hooks before app construction", asy
   await new Promise(resolve => runtime.close(resolve));
   assert.equal(exit.code, 0);
   assert.deepEqual(fs.readFileSync(path.join(dir, "order.log"), "utf8").trim(), "error");
+});
+
+test("bundled package CLI enforces strict success, failures, and bounded retry", async () => {
+  const success = await runLoop({ artifact: true, events: [http404("/custom/mutate")] });
+  assert.deepEqual(success.order, ["pull", "push", "resp"]);
+
+  const pullFailure = await runLoop({ artifact: true, mode: "incomplete", events: [http404("/custom/mutate")] });
+  assert.deepEqual(pullFailure.order, ["pull", "error"]);
+
+  const pushFailure = await runLoop({ artifact: true, mode: "push-fail", events: [http404("/custom/mutate")] });
+  assert.deepEqual(pushFailure.order, ["pull", "push", "error"]);
+
+  const retry = await runLoop({
+    artifact: true,
+    mode: "fail-once",
+    events: [http404("/custom/mutate"), http404("/custom/mutate")],
+    maxInvocations: 2
+  });
+  assert.deepEqual(retry.order, ["pull", "error", "pull", "push", "resp"]);
 });

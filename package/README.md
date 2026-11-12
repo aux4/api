@@ -447,6 +447,8 @@ Both steps are **best-effort**: a failed pull or push is logged and never aborts
 
 For quota-enrolled VMs, set `AUX4_LAMBDA_STATE_SYNC_REQUIRED=true` to enable the strict barrier. Strict mode requires both in-process module hooks, pulls before every ordinary HTTP handler (including custom non-`/action/` routes) and WebSocket dispatch, and pushes after dispatch but before acknowledging either a success or HTTP error response. Pull failures or incomplete pulls prevent the handler from running; push failures post an invocation error. Strict pulls never use the legacy TTL coalescing or shell fallbacks. Leave the variable unset/false for the legacy best-effort behavior.
 
+The strict hook result contract is explicit: pulls must return `{ complete: true }`; pushes must return `{ ok: true }` or nonnegative integer `{ pushed, deleted }` counts. `{ skipped: true }` is accepted only when `CLOUD_STATE_ENABLED` is explicitly `false`, `0`, or `no`; otherwise it fails closed.
+
 | Variable | Purpose |
 |----------|---------|
 | `AUX4_LAMBDA_PRE_INVOKE_MODULE` | Path to an ES module exporting `pullFromEnv(env)`; imported in-process and called before a stateful action. |
