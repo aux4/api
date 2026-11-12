@@ -16,8 +16,10 @@ test("sealed OAuth sessions are versioned, opaque, and authenticated", () => {
     "user-1"
   );
 
-  const replacement = token.endsWith("A") ? "B" : "A";
-  const tampered = token.slice(0, -1) + replacement;
+  // Flip the first encoded byte (the GCM IV), rather than the final base64url
+  // character whose unused padding bits may decode to the original bytes.
+  const replacement = token[3] === "A" ? "B" : "A";
+  const tampered = token.slice(0, 3) + replacement + token.slice(4);
   assert.equal(SessionToken.unseal(tampered, "a sufficiently long session secret"), null);
   assert.equal(SessionToken.unseal(token, "the wrong secret"), null);
 });
