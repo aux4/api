@@ -12,7 +12,7 @@ async function main() {
     }
 
     if (args[0] === 'stop') {
-      Server.stopByPid();
+      await Server.stopByPid();
       return;
     }
 

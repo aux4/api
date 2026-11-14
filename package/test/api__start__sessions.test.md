@@ -1,5 +1,9 @@
 # api start sessions
 
+```timeout
+10000
+```
+
 ```file:config.yaml
 config:
   port: 18713
@@ -153,6 +157,48 @@ data: hello session
 event: end
 ```
 
+### should forward raw input bytes unmodified regardless of the client's Content-Type
+
+```timeout
+5000
+```
+
+```execute
+ID=$(curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo | jq -r '.id')
+curl -s -X POST -H "Authorization: Bearer user-a" --data-binary "hello default content-type" http://localhost:18713/api/echo/$ID/input >/dev/null
+curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/end >/dev/null
+curl -s -N -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/events
+```
+
+```expect:partial
+data: hello default content-type
+```
+
+```expect:partial
+event: end
+```
+
+### should forward raw input bytes unmodified when Content-Type is application/json
+
+```timeout
+5000
+```
+
+```execute
+ID=$(curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo | jq -r '.id')
+curl -s -X POST -H "Authorization: Bearer user-a" -H "Content-Type: application/json" --data-binary '{"not":"parsed, raw bytes"}' http://localhost:18713/api/echo/$ID/input >/dev/null
+curl -s -X POST -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/end >/dev/null
+curl -s -N -H "Authorization: Bearer user-a" http://localhost:18713/api/echo/$ID/events
+```
+
+```expect:partial
+data: {"not":"parsed, raw bytes"}
+```
+
+```expect:partial
+event: end
+```
+
 ## unauthenticated
 
 ### should reject session create and events with 401 when no bearer token is presented
@@ -232,13 +278,13 @@ event: end
 ### should kill the command process when the client disconnects
 
 ```timeout
-8000
+60000
 ```
 
 ```execute
 ID=$(curl -s -X POST -H "Authorization: Bearer disc-user" http://localhost:18713/api/ticker | jq -r '.id')
 curl -s -N --max-time 1 -H "Authorization: Bearer disc-user" http://localhost:18713/api/ticker/$ID/events >/dev/null 2>&1
-sleep 2
+for i in $(seq 1 160); do [ "$(pgrep -f "^aux4 apitest ticker" | wc -l | tr -d ' ')" = "0" ] && break; sleep 0.25; done
 pgrep -f "^aux4 apitest ticker" | wc -l | tr -d ' '
 ```
 

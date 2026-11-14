@@ -1,5 +1,51 @@
 # Release notes
 
+## 2.1.12
+
+### Added: byte-exact raw request body on `event.rawBody` / `--rawBody`
+
+`Server.js`'s content-type parsers (JSON, urlencoded, wildcard) now capture
+the original request bytes in `req.rawBody` before parsing, and
+`EventBuilder.buildRestEvent` / `EventAdapter.buildSyntheticRequest` surface
+them as `event.rawBody` alongside the existing (JSON.stringify-reserialized)
+`event.body`. `RestHandler.buildArgs` forwards the same bytes as `--rawBody`
+to route commands. This is required for any route that verifies an HMAC
+signature over the exact bytes the client sent (e.g. Slack-style webhook
+verification) — the previously reconstructed `event.body` does not preserve
+original spacing/escaping and fails signature checks that depend on them.
+Existing `event.body` / `--body` behavior is unchanged.
+
+### Fixed: `aux4 api stop` could return before the old server released its port
+
+`Server.stopByPid()` sent `SIGTERM` and returned immediately, so a caller
+that stopped one server and immediately started another on the same port
+could hit `EADDRINUSE` on the new process (or have its readiness check talk
+to the still-shutting-down old one). `stopByPid()` now polls
+(`process.kill(pid, 0)`, bounded ~3s) until the old process has actually
+exited before returning. `aux4 api stop` behavior is otherwise unchanged.
+
+## 2.1.8
+
+### Fix: `config.sessions` `/input` corrupted the stdin payload unless the client sent an unusual Content-Type
+
+The documented contract for `POST <path>/:id/input` is "forwarded byte-for-byte
+— no parsing, no content-type restriction". That held only for a Content-Type
+with no app-wide parser of its own (e.g. `application/octet-stream`). A client
+posting with the default (none sent, which Fastify treats as `text/plain`),
+`application/x-www-form-urlencoded`, or `application/json` — all three of
+which the server registers its own app-wide parser for — had its raw bytes
+parsed by that app-wide parser *before* reaching the session's stdin: a
+urlencoded body with no `=` parsed into a key/value object, which then
+stringified to the literal text `[object Object]`; a JSON body was parsed and
+re-stringified, silently normalizing (and rejecting invalid-JSON) payloads
+that were supposed to pass through untouched. Fixed by having the session
+routes' encapsulated Fastify context explicitly remove and replace the three
+inherited exact-match parsers (not just register a `"*"` catch-all, which
+Fastify only invokes when no exact-match parser exists anywhere in the
+inherited chain) with the same raw-buffer passthrough already used for every
+other Content-Type. `/input` now forwards the exact request body regardless
+of what Content-Type the client sends or omits.
+
 ## 2.1.7
 
 ### Added: generic session streaming (REST + WebSocket) for long-lived commands

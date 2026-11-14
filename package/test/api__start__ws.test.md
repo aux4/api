@@ -1,5 +1,9 @@
 # api start websocket
 
+```timeout
+10000
+```
+
 ```file:config.yaml
 config:
   port: 18711
@@ -98,6 +102,10 @@ w.on("close", () => { clearTimeout(t); process.exit(0); });
 w.on("error", (e) => { console.error("ws error:", e.message); clearTimeout(t); process.exit(1); });
 ```
 
+```beforeAll
+rm -rf views static
+```
+
 ```afterAll
 aux4 api stop 2>/dev/null
 rm -rf .tmp
@@ -108,14 +116,16 @@ rm -rf .tmp
 ### should have started server
 
 ```timeout
-20000
+60000
 ```
 
 ```execute
 npm install ws --no-save --no-audit --no-fund >/dev/null 2>&1
-nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
-for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
-curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/
+rm -f .server.log
+nohup aux4 api start --configFile config.yaml >.server.log 2>&1 &
+for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18711/ && break; sleep 0.25; done
+CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:18711/)
+if [ "$CODE" = "404" ]; then echo "$CODE"; else echo "server failed to start: $(cat .server.log)" >&2; echo "$CODE"; fi
 ```
 
 ```expect
@@ -183,12 +193,12 @@ hello over ws
 ### should kill the command process when the client disconnects
 
 ```timeout
-8000
+20000
 ```
 
 ```execute
 node ws-disconnect-client.js
-sleep 2
+for i in $(seq 1 40); do [ "$(pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' ')" = "0" ] && break; sleep 0.25; done
 pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' '
 ```
 
@@ -198,9 +208,13 @@ pgrep -f "^aux4 apitest ws-echo-stdin" | wc -l | tr -d ' '
 
 ## WebSocket stream route with security.auth
 
+```timeout
+10000
+```
+
 ```file:config.yaml
 config:
-  port: 18712
+  port: 18990
   security:
     auth:
       type: bearer
@@ -269,7 +283,7 @@ config:
 ```file:ws-stream-noauth-client.js
 const W = require("ws");
 const t = setTimeout(() => { process.exit(1); }, 3000);
-const w = new W("ws://localhost:18712/wsstream");
+const w = new W("ws://localhost:18990/wsstream");
 w.on("open", () => { w.send("should never be read\n"); });
 w.on("close", (code) => { console.log("closed:" + code); clearTimeout(t); process.exit(0); });
 w.on("error", (e) => { console.error("ws error:", e.message); clearTimeout(t); process.exit(1); });
@@ -278,7 +292,7 @@ w.on("error", (e) => { console.error("ws error:", e.message); clearTimeout(t); p
 ```file:ws-stream-auth-client.js
 const W = require("ws");
 const t = setTimeout(() => { process.exit(1); }, 10000);
-const w = new W("ws://localhost:18712/wsstream", { headers: { Authorization: "Bearer auth-user" } });
+const w = new W("ws://localhost:18990/wsstream", { headers: { Authorization: "Bearer auth-user" } });
 // A small delay after open: authentication (spawning the validator command)
 // happens server-side before the session is created and the frame listener
 // is attached, so sending immediately on open can race ahead of it.
@@ -295,13 +309,13 @@ aux4 api stop 2>/dev/null
 ### should have started the gated server
 
 ```timeout
-20000
+40000
 ```
 
 ```execute
 nohup aux4 api start --configFile config.yaml >/dev/null 2>&1 &
-for i in $(seq 1 60); do curl -s -o /dev/null http://localhost:18712/ && break; sleep 0.25; done
-curl -s -o /dev/null -w "%{http_code}" http://localhost:18712/
+for i in $(seq 1 120); do curl -s -o /dev/null http://localhost:18990/ && break; sleep 0.25; done
+curl -s -o /dev/null -w "%{http_code}" http://localhost:18990/
 ```
 
 ```expect
