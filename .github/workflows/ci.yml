@@ -24,6 +24,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Test command wrapper
+        run: node --test test/command-wrapper.test.cjs
+
       - name: Lint
         uses: aux4/action@v1
         with:
