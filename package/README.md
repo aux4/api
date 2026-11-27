@@ -1170,4 +1170,8 @@ config:
 
 ## Environment Variables
 
+`AUX4_COMMAND_WRAPPER` optionally names a trusted, absolute executable path owned by the host. Command strings run as `wrapper -- sh -c <command>`; structured execution preserves executable and argument boundaries with `wrapper -- <executable> <args...>`. The wrapper also covers streaming commands. Invalid wrapper paths fail closed.
+
+The aux4.cloud API runtime uses this hook to resolve explicitly assigned secret fields for each child command. Values stay out of the warm server environment, and a failed resolution prevents the command from running. Tools sharing a VM share that VM's grants.
+
 - `AUX4_API_PORT` — override the port (takes precedence over config file)
