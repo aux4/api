@@ -104,6 +104,17 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify bundled package entrypoint
+        run: |
+          set -euo pipefail
+          test -s package/lib/server.js
+          node --check package/lib/server.js
+          aux4 aux4 pkger build package
+          ARCHIVE="aux4_api_$(jq -r '.version' package/.aux4).zip"
+          test -f "$ARCHIVE"
+          unzip -l "$ARCHIVE" | grep -F 'aux4/api/lib/server.js'
+          test "$(unzip -p "$ARCHIVE" aux4/api/lib/server.js | wc -c | tr -d ' ')" -gt 0
+
       - name: Mint prod hub publish token
         id: mint
         if: github.ref_name == 'main'
